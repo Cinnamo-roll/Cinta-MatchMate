@@ -1,7 +1,7 @@
 # 根目录：仅允许项目目录和 .gitignore 自身，其余全部忽略
 /*
 !/.gitignore
-!/matchmate-client/
+!/matchmate-mobile/
 !/matchmate-server/
 
 # IntelliJ IDEA
