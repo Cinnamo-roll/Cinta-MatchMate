@@ -18,12 +18,55 @@
             <result property="updateTime" column="updateTime" />
             <result property="isDelete" column="isDelete" />
             <result property="userRole" column="userRole" />
-            <result property="userTags" column="userTags" />
     </resultMap>
 
     <sql id="Base_Column_List">
         id,username,userAccount,avatarUrl,gender,userPassword,
         phone,email,userStatus,createTime,updateTime,
-        isDelete,userRole,userTags
+        isDelete,userRole
     </sql>
+
+    <select id="searchByKeywordAndTags" resultMap="BaseResultMap">
+        SELECT u.*
+        FROM user u
+        WHERE u.isDelete = 0
+          AND u.userStatus = 0
+        <if test="keyword != null and keyword != ''">
+          AND (
+            u.username LIKE CONCAT('%', #{keyword}, '%')
+            OR u.userAccount LIKE CONCAT('%', #{keyword}, '%')
+            OR EXISTS (
+              SELECT 1
+              FROM user_tag keyword_ut
+              JOIN tag keyword_t ON keyword_t.id = keyword_ut.tagId
+              WHERE keyword_ut.userId = u.id
+                AND keyword_t.isDelete = 0
+                AND keyword_t.tagName LIKE CONCAT('%', #{keyword}, '%')
+            )
+          )
+        </if>
+        <if test="tagCount > 0">
+          AND (
+            SELECT COUNT(DISTINCT selected_t.tagName)
+            FROM user_tag selected_ut
+            JOIN tag selected_t ON selected_t.id = selected_ut.tagId
+            WHERE selected_ut.userId = u.id
+              AND selected_t.isDelete = 0
+              AND selected_t.tagName IN
+              <foreach collection="tagList" item="tagName" open="(" separator="," close=")">
+                #{tagName}
+              </foreach>
+          ) = #{tagCount}
+        </if>
+        ORDER BY u.createTime DESC, u.id DESC
+    </select>
+
+    <select id="recommendUsers" resultMap="BaseResultMap">
+        SELECT u.*
+        FROM user u
+        WHERE u.isDelete = 0
+          AND u.userStatus = 0
+        ORDER BY RAND()
+        LIMIT #{limit}
+    </select>
 </mapper>

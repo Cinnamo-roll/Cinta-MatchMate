@@ -8,8 +8,10 @@ import com.cinta.matchmateserver.constant.UserConstant;
 import com.cinta.matchmateserver.exception.BusinessException;
 import com.cinta.matchmateserver.mapper.UserMapper;
 import com.cinta.matchmateserver.model.domain.User;
+import com.cinta.matchmateserver.model.request.UpdateUserProfileRequest;
 import com.cinta.matchmateserver.model.vo.UserVO;
 import com.cinta.matchmateserver.service.PasswordService;
+import com.cinta.matchmateserver.service.TagService;
 import com.cinta.matchmateserver.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
@@ -17,14 +19,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.util.CollectionUtils;
-import tools.jackson.core.JacksonException;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -42,12 +39,12 @@ public class UserServiceImpl implements UserService {
 
     private final UserMapper userMapper;
     private final PasswordService passwordService;
-    private final ObjectMapper objectMapper;
+    private final TagService tagService;
 
-    public UserServiceImpl(UserMapper userMapper, PasswordService passwordService, ObjectMapper objectMapper) {
+    public UserServiceImpl(UserMapper userMapper, PasswordService passwordService, TagService tagService) {
         this.userMapper = userMapper;
         this.passwordService = passwordService;
-        this.objectMapper = objectMapper;
+        this.tagService = tagService;
     }
 
     @Override
@@ -110,7 +107,7 @@ public class UserServiceImpl implements UserService {
         userVO.setUserStatus(user.getUserStatus());
         userVO.setCreateTime(user.getCreateTime());
         userVO.setUserRole(user.getUserRole());
-        userVO.setUserTags(user.getUserTags());
+        userVO.setUserTags(tagService.getUserTagNames(user.getId()));
         return userVO;
     }
 
@@ -169,20 +166,67 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public List<UserVO> searchUserByTags(List<String> tagList) {
-        if (CollectionUtils.isEmpty(tagList)) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR);
-        }
+    public List<UserVO> searchUserByTags(String keyword, List<String> tagList) {
         List<String> normalizedTags = normalizeTags(tagList);
-
-        // LIKE 仅用于缩小候选集；随后解析 JSON 并精确判断，避免子串误匹配。
-        LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
-        normalizedTags.forEach(tag -> queryWrapper.like(User::getUserTags, tag));
-
-        return userMapper.selectList(queryWrapper).stream()
-                .filter(user -> containsAllTags(user, normalizedTags))
+        String normalizedKeyword = StringUtils.trimToNull(keyword);
+        return userMapper.searchByKeywordAndTags(
+                        normalizedKeyword,
+                        normalizedTags,
+                        normalizedTags.size()
+                ).stream()
                 .map(this::toUserVO)
                 .toList();
+    }
+
+    @Override
+    public UserVO updateCurrentUserTags(List<String> tagList, HttpServletRequest request) {
+        User user = getLoginUser(request);
+        tagService.replaceUserTags(user.getId(), tagList);
+        return toUserVO(user);
+    }
+
+    @Override
+    public UserVO updateCurrentUserProfile(
+            UpdateUserProfileRequest updateRequest,
+            HttpServletRequest request) {
+        User currentUser = getLoginUser(request);
+        validateProfileUpdate(updateRequest);
+
+        User updateUser = new User();
+        updateUser.setId(currentUser.getId());
+        updateUser.setUsername(StringUtils.trimToNull(updateRequest.getUsername()));
+        updateUser.setAvatarUrl(StringUtils.trimToNull(updateRequest.getAvatarUrl()));
+        updateUser.setGender(updateRequest.getGender());
+        updateUser.setPhone(StringUtils.trimToNull(updateRequest.getPhone()));
+        updateUser.setEmail(StringUtils.trimToNull(updateRequest.getEmail()));
+
+        if (userMapper.updateById(updateUser) != 1) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "用户资料更新失败");
+        }
+
+        User updatedUser = userMapper.selectById(currentUser.getId());
+        return toUserVO(updatedUser);
+    }
+
+    // TODO: 后期改为基于标签匹配的智能推荐算法
+    @Override
+    public List<UserVO> recommendUsers(int limit) {
+        return userMapper.recommendUsers(limit).stream()
+                .map(this::toUserVO)
+                .toList();
+    }
+
+    @Override
+    public void deleteCurrentUser(String userPassword, HttpServletRequest request) {
+        User currentUser = getLoginUser(request);
+        if (!passwordService.matches(userPassword, currentUser.getUserPassword())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "密码错误");
+        }
+        userMapper.deleteById(currentUser.getId());
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            session.invalidate();
+        }
     }
 
     private void validateAccountAndPassword(String userAccount, String userPassword) {
@@ -251,31 +295,22 @@ public class UserServiceImpl implements UserService {
     }
 
     private List<String> normalizeTags(List<String> tagList) {
+        if (tagList == null) {
+            return List.of();
+        }
         List<String> normalizedTags = tagList.stream()
                 .filter(StringUtils::isNotBlank)
                 .map(String::trim)
                 .distinct()
                 .toList();
-        if (normalizedTags.isEmpty()) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "标签不能为空");
-        }
         return normalizedTags;
     }
 
-    private boolean containsAllTags(User user, List<String> requiredTags) {
-        if (StringUtils.isBlank(user.getUserTags())) {
-            return false;
-        }
-        try {
-            Set<String> userTags = objectMapper.readValue(
-                    user.getUserTags(),
-                    new TypeReference<Set<String>>() {
-                    }
-            );
-            return userTags != null && userTags.containsAll(requiredTags);
-        } catch (JacksonException e) {
-            log.warn("Ignoring malformed tags for userId={}", user.getId());
-            return false;
+    private void validateProfileUpdate(UpdateUserProfileRequest updateRequest) {
+        if (updateRequest.getGender() != null
+                && updateRequest.getGender() != 1
+                && updateRequest.getGender() != 2) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "性别只能为男或女");
         }
     }
 }

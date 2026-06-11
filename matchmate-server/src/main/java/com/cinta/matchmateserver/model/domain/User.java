@@ -82,8 +82,4 @@ public class User {
      */
     private Integer userRole;
 
-    /**
-     * JSON 格式的用户标签列表。
-     */
-    private String userTags;
 }

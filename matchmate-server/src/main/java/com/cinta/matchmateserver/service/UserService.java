@@ -2,6 +2,7 @@ package com.cinta.matchmateserver.service;
 
 import com.cinta.matchmateserver.common.PageResponse;
 import com.cinta.matchmateserver.model.domain.User;
+import com.cinta.matchmateserver.model.request.UpdateUserProfileRequest;
 import com.cinta.matchmateserver.model.vo.UserVO;
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -79,11 +80,35 @@ public interface UserService {
      * @param request HTTP请求对象
      */
     void userLogout(HttpServletRequest request);
+
     /**
      * 根据标签搜索用户。
      *
      * @param tagList 必须全部匹配的标签
      * @return 匹配的用户列表
      */
-    List<UserVO> searchUserByTags(List<String> tagList);
+    List<UserVO> searchUserByTags(String keyword, List<String> tagList);
+
+    UserVO updateCurrentUserTags(List<String> tagList, HttpServletRequest request);
+
+    UserVO updateCurrentUserProfile(
+            UpdateUserProfileRequest updateRequest,
+            HttpServletRequest request
+    );
+
+    /**
+     * 推荐用户（随机）。
+     *
+     * @param limit 最大推荐数量
+     * @return 推荐用户列表
+     */
+    List<UserVO> recommendUsers(int limit);
+
+    /**
+     * 注销当前登录用户账户（需验证密码）。
+     *
+     * @param userPassword 用户密码
+     * @param request HTTP 请求
+     */
+    void deleteCurrentUser(String userPassword, HttpServletRequest request);
 }

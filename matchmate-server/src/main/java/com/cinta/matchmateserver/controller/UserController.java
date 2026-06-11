@@ -8,6 +8,9 @@ import com.cinta.matchmateserver.exception.BusinessException;
 import com.cinta.matchmateserver.model.domain.User;
 import com.cinta.matchmateserver.model.request.UserLoginRequest;
 import com.cinta.matchmateserver.model.request.UserRegisterRequest;
+import com.cinta.matchmateserver.model.request.UpdateUserTagsRequest;
+import com.cinta.matchmateserver.model.request.DeleteAccountRequest;
+import com.cinta.matchmateserver.model.request.UpdateUserProfileRequest;
 import com.cinta.matchmateserver.model.vo.UserVO;
 import com.cinta.matchmateserver.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,6 +18,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/user")
@@ -64,6 +69,16 @@ public class UserController {
         User currentUser = userService.getLoginUser(request);
         return ResultUtils.success(userService.toUserVO(currentUser));
     }
+
+    @Operation(summary = "更新当前用户资料", description = "更新当前登录用户的公开资料")
+    @PutMapping("/current")
+    public BaseResponse<UserVO> updateCurrentUser(
+            @Valid @RequestBody UpdateUserProfileRequest updateRequest,
+            HttpServletRequest request) {
+        return ResultUtils.success(
+                userService.updateCurrentUserProfile(updateRequest, request)
+        );
+    }
     @Operation(summary = "用户查询", description = "用户查询接口")
     @GetMapping("/search")
     public BaseResponse<PageResponse<UserVO>> searchUsers(
@@ -87,4 +102,37 @@ public class UserController {
         return ResultUtils.success(null);
     }
 
+    @Operation(summary = "用户搜索", description = "用户搜索接口")
+    @GetMapping("/search/tags")
+    public BaseResponse<List<UserVO>> searchUsersByTags(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) List<String> tagList) {
+        return ResultUtils.success(userService.searchUserByTags(keyword, tagList));
+    }
+
+    @Operation(summary = "推荐用户", description = "随机推荐用户，默认8人")
+    @GetMapping("/recommend")
+    public BaseResponse<List<UserVO>> recommendUsers(
+            @RequestParam(defaultValue = "8") int limit) {
+        return ResultUtils.success(userService.recommendUsers(limit));
+    }
+
+    @Operation(summary = "更新个人标签", description = "替换当前登录用户的全部标签，最多 3 个")
+    @PutMapping("/tags")
+    public BaseResponse<UserVO> updateCurrentUserTags(
+            @Valid @RequestBody UpdateUserTagsRequest updateRequest,
+            HttpServletRequest request) {
+        return ResultUtils.success(
+                userService.updateCurrentUserTags(updateRequest.getTagList(), request)
+        );
+    }
+
+    @Operation(summary = "注销账户", description = "注销当前登录用户账户，需验证密码")
+    @DeleteMapping("/current")
+    public BaseResponse<Void> deleteCurrentUser(
+            @Valid @RequestBody DeleteAccountRequest deleteRequest,
+            HttpServletRequest request) {
+        userService.deleteCurrentUser(deleteRequest.getUserPassword(), request);
+        return ResultUtils.success(null);
+    }
 }

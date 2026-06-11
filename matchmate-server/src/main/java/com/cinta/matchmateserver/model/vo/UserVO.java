@@ -4,6 +4,7 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.util.Date;
+import java.util.List;
 
 /**
  * 对外返回的用户信息，不包含密码及逻辑删除字段。
@@ -23,5 +24,5 @@ public class UserVO implements Serializable {
     private Integer userStatus;
     private Date createTime;
     private Integer userRole;
-    private String userTags;
+    private List<String> userTags;
 }

@@ -110,4 +110,49 @@ class UserControllerTest {
 
         verify(userService).deleteUser(2L);
     }
+
+    @Test
+    void searchUsersSupportsKeywordAndTags() throws Exception {
+        when(userService.searchUserByTags("玉桂狗", java.util.List.of("咖啡")))
+                .thenReturn(java.util.List.of());
+
+        mockMvc.perform(get("/user/search/tags")
+                        .param("keyword", "玉桂狗")
+                        .param("tagList", "咖啡"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+
+        verify(userService).searchUserByTags("玉桂狗", java.util.List.of("咖啡"));
+    }
+
+    @Test
+    void updateTagsRejectsMoreThanThreeTags() throws Exception {
+        mockMvc.perform(put("/user/tags")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "tagList": ["跑步", "摄影", "咖啡", "电影"]
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.PARAM_ERROR.getCode()));
+
+        verify(userService, never()).updateCurrentUserTags(any(), any());
+    }
+
+    @Test
+    void updateProfileRejectsInvalidGender() throws Exception {
+        mockMvc.perform(put("/user/current")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "测试用户",
+                                  "gender": 3
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.PARAM_ERROR.getCode()));
+
+        verify(userService, never()).updateCurrentUserProfile(any(), any());
+    }
 }
