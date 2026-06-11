@@ -8,9 +8,9 @@ spring:
     password: 1234
 server:
   port: 8080
-  reactive:
+  servlet:
     session:
-      timeout: 86400
+      timeout: 86400s
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: false
