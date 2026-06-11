@@ -2,6 +2,7 @@
 /*
 !/.gitignore
 !/matchmate-mobile/
+!/matchmate-client/
 !/matchmate-server/
 
 # IntelliJ IDEA
