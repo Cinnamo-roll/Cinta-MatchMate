@@ -1,81 +1,89 @@
 package com.cinta.matchmateserver.model.domain;
 
-import com.baomidou.mybatisplus.annotation.*;
-
-import java.util.Date;
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
+import java.util.Date;
+
 /**
- * 用户表
- * @TableName user
+ * 用户数据库实体。
  */
-@TableName(value ="user")
+@TableName("user")
 @Data
 public class User {
+
     /**
-     * id
+     * 用户 ID。
      */
     @TableId(type = IdType.AUTO)
     private Long id;
 
     /**
-     * 用户呢称
+     * 用户昵称。
      */
     private String username;
 
     /**
-     * 用户账号
+     * 登录账号。
      */
     private String userAccount;
 
     /**
-     * 用户头像
+     * 头像地址。
      */
     private String avatarUrl;
 
     /**
-     * 用户性别
+     * 性别。
      */
     private Integer gender;
 
     /**
-     * 用户密码
+     * 加密后的密码。
      */
     private String userPassword;
 
     /**
-     * 用户电话
+     * 手机号。
      */
     private String phone;
 
     /**
-     * 用户邮箱
+     * 邮箱。
      */
     private String email;
 
     /**
-     * 用户状态（0 - 正常）
+     * 用户状态：0 表示正常。
      */
     private Integer userStatus;
 
     /**
-     * 用户创建时间
+     * 创建时间。
      */
     private Date createTime;
 
     /**
-     * 用户更新时间
+     * 更新时间。
      */
     private Date updateTime;
 
     /**
-     * 用户是否删除（0 - 未删除）
+     * 逻辑删除标记：0 未删除，1 已删除。
      */
     @TableLogic
     private Integer isDelete;
 
     /**
-     * 用户角色（0 - 普通用户  1 - 管理员）
+     * 用户角色：0 普通用户，1 管理员。
      */
     private Integer userRole;
+
+    /**
+     * JSON 格式的用户标签列表。
+     */
+    private String userTags;
 }

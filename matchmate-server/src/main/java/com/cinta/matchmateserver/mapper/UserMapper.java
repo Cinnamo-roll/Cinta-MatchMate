@@ -4,15 +4,8 @@ import com.cinta.matchmateserver.model.domain.User;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 
 /**
-* @author CinnamoRoll
-* @description 针对表【user(用户表)】的数据库操作Mapper
-* @createDate 2026-06-10 15:28:16
-* @Entity generator.domain.User
-*/
+ * 用户数据访问接口。
+ */
 public interface UserMapper extends BaseMapper<User> {
 
 }
-
-
-
-

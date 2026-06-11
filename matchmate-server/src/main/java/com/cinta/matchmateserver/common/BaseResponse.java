@@ -4,8 +4,14 @@ import lombok.Data;
 
 import java.io.Serializable;
 
+/**
+ * 统一接口响应。
+ *
+ * @param <T> 响应数据类型
+ */
 @Data
 public class BaseResponse<T> implements Serializable {
+
     private static final long serialVersionUID = 1L;
 
     private int code;

@@ -1,5 +1,8 @@
 package com.cinta.matchmateserver.common;
 
+/**
+ * 统一响应构造工具。
+ */
 public final class ResultUtils {
 
     private ResultUtils() {
