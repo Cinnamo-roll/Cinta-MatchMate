@@ -1,13 +1,13 @@
- export type User = {
-    id: number,
-    username: string,
-    userAccount: string,
-    avatarUrl: string,
-    gender: number,
-    phone: string,
-    email: string,
-    userStatus: number,
-    userRole: number,
-    userTags: string[],
-    createTime: Date
-}
+export type User = {
+  id: number;
+  username: string | null;
+  userAccount: string;
+  avatarUrl: string | null;
+  gender: number | null;
+  phone: string | null;
+  email: string | null;
+  userStatus: number;
+  userRole: number;
+  userTags: string[];
+  createTime: string;
+};

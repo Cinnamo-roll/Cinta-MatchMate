@@ -1,0 +1,21 @@
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tag-option {
+  padding: 7px 13px;
+  color: #646566;
+  font-size: 14px;
+  background: #f2f3f5;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  cursor: pointer;
+}
+
+.tag-option.selected {
+  color: #1989fa;
+  background: #ecf9ff;
+  border-color: #1989fa;
+}

@@ -1,0 +1,33 @@
+.auth-page {
+  margin: 32px 16px;
+  padding: 28px 18px 22px;
+  text-align: center;
+  background: #fff;
+  border-radius: 16px;
+}
+
+.auth-page h2 {
+  margin: 12px 0 6px;
+}
+
+.auth-page > p {
+  margin: 0 0 20px;
+  color: #969799;
+  font-size: 13px;
+}
+
+.auth-page .van-button {
+  margin-top: 20px;
+}
+
+.auth-link {
+  margin-top: 16px;
+  margin-bottom: 0;
+  color: #969799;
+  font-size: 13px;
+}
+
+.auth-link span {
+  color: #1989fa;
+  cursor: pointer;
+}
