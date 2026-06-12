@@ -17,9 +17,6 @@ public class UpdateUserProfileRequest implements Serializable {
     @Size(max = 50, message = "用户名不能超过 50 个字符")
     private String username;
 
-    @Size(max = 1024, message = "头像地址过长")
-    private String avatarUrl;
-
     @Min(value = 1, message = "性别只能为男或女")
     @Max(value = 2, message = "性别只能为男或女")
     private Integer gender;

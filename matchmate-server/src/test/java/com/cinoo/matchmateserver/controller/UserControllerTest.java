@@ -8,6 +8,7 @@ import com.cinoo.matchmateserver.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -176,5 +177,33 @@ class UserControllerTest {
                 eq("newPassword123"),
                 any()
         );
+    }
+
+    @Test
+    void uploadAvatarAcceptsMultipartImage() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "avatar.png",
+                MediaType.IMAGE_PNG_VALUE,
+                new byte[]{1, 2, 3}
+        );
+        UserVO user = new UserVO();
+        user.setAvatarUrl("https://cdn.example.com/avatar.png");
+        when(userService.uploadAvatar(any(), any())).thenReturn(user);
+
+        mockMvc.perform(multipart("/user/avatar").file(file))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.avatarUrl").value(user.getAvatarUrl()));
+
+        verify(userService).uploadAvatar(any(), any());
+    }
+
+    @Test
+    void uploadAvatarRequiresFilePart() throws Exception {
+        mockMvc.perform(multipart("/user/avatar"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.PARAM_ERROR.getCode()));
+
+        verify(userService, never()).uploadAvatar(any(), any());
     }
 }

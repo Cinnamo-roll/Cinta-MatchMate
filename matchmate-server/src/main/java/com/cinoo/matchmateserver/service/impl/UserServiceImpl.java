@@ -17,12 +17,15 @@ import com.cinoo.matchmateserver.model.vo.UserVO;
 import com.cinoo.matchmateserver.service.PasswordService;
 import com.cinoo.matchmateserver.service.TagService;
 import com.cinoo.matchmateserver.service.UserService;
+import com.cinoo.matchmateserver.service.OnlineUserService;
+import com.cinoo.matchmateserver.utils.OssUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.ArrayList;
@@ -49,18 +52,24 @@ public class UserServiceImpl implements UserService {
     private final TagService tagService;
     private final DistributedCacheService cacheService;
     private final CacheInvalidationService cacheInvalidationService;
+    private final OssUtils ossUtils;
+    private final OnlineUserService onlineUserService;
 
     public UserServiceImpl(
             UserMapper userMapper,
             PasswordService passwordService,
             TagService tagService,
             DistributedCacheService cacheService,
-            CacheInvalidationService cacheInvalidationService) {
+            CacheInvalidationService cacheInvalidationService,
+            OssUtils ossUtils,
+            OnlineUserService onlineUserService) {
         this.userMapper = userMapper;
         this.passwordService = passwordService;
         this.tagService = tagService;
         this.cacheService = cacheService;
         this.cacheInvalidationService = cacheInvalidationService;
+        this.ossUtils = ossUtils;
+        this.onlineUserService = onlineUserService;
     }
 
     @Override
@@ -112,11 +121,13 @@ public class UserServiceImpl implements UserService {
         if (user == null) {
             return null;
         }
-        return cacheService.get(
+        UserVO userVO = cacheService.get(
                 CacheNames.USER_VIEWS,
                 CacheKeys.user(user.getId()),
                 () -> buildUserVO(user)
         );
+        userVO.setIsOnline(onlineUserService.isOnline(user.getId()));
+        return userVO;
     }
 
     private UserVO buildUserVO(User user) {
@@ -132,6 +143,7 @@ public class UserServiceImpl implements UserService {
         userVO.setCreateTime(user.getCreateTime());
         userVO.setUserRole(user.getUserRole());
         userVO.setUserTags(tagService.getUserTagNames(user.getId()));
+        userVO.setIsOnline(onlineUserService.isOnline(user.getId()));
         return userVO;
     }
 
@@ -197,11 +209,13 @@ public class UserServiceImpl implements UserService {
         if (normalizedKeyword != null) {
             return loadSearchResults(normalizedKeyword, normalizedTags);
         }
-        return cacheService.get(
+        List<UserVO> users = cacheService.get(
                 CacheNames.USER_SEARCHES,
                 CacheKeys.search(normalizedTags),
                 () -> loadSearchResults(null, normalizedTags)
         );
+        refreshOnlineStatus(users);
+        return users;
     }
 
     public List<UserVO> refreshSearchCache(List<String> tagList) {
@@ -240,7 +254,6 @@ public class UserServiceImpl implements UserService {
         User updateUser = new User();
         updateUser.setId(currentUser.getId());
         updateUser.setUsername(StringUtils.trimToNull(updateRequest.getUsername()));
-        updateUser.setAvatarUrl(StringUtils.trimToNull(updateRequest.getAvatarUrl()));
         updateUser.setGender(updateRequest.getGender());
         updateUser.setPhone(StringUtils.trimToNull(updateRequest.getPhone()));
         updateUser.setEmail(StringUtils.trimToNull(updateRequest.getEmail()));
@@ -283,11 +296,13 @@ public class UserServiceImpl implements UserService {
     @Override
     public List<UserVO> recommendUsers(int limit) {
         validateRecommendationLimit(limit);
-        return cacheService.get(
+        List<UserVO> users = cacheService.get(
                 CacheNames.USER_RECOMMENDATIONS,
                 CacheKeys.recommendation(limit),
                 () -> loadRecommendations(limit)
         );
+        refreshOnlineStatus(users);
+        return users;
     }
 
     public List<UserVO> refreshRecommendationCache(int limit) {
@@ -319,6 +334,30 @@ public class UserServiceImpl implements UserService {
         if (session != null) {
             session.invalidate();
         }
+    }
+
+    @Override
+    public UserVO uploadAvatar(MultipartFile file, HttpServletRequest request) {
+        User currentUser = getLoginUser(request);
+        String oldAvatarUrl = currentUser.getAvatarUrl();
+        String newAvatarUrl = ossUtils.uploadAvatar(currentUser.getId(), file);
+
+        User updateUser = new User();
+        updateUser.setId(currentUser.getId());
+        updateUser.setAvatarUrl(newAvatarUrl);
+        try {
+            if (userMapper.updateById(updateUser) != 1) {
+                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "头像更新失败");
+            }
+        } catch (RuntimeException e) {
+            ossUtils.deleteIfManaged(newAvatarUrl);
+            throw e;
+        }
+
+        cacheInvalidationService.userChanged(currentUser.getId());
+        ossUtils.deleteIfManaged(oldAvatarUrl);
+        User updatedUser = userMapper.selectById(currentUser.getId());
+        return toUserVO(updatedUser);
     }
 
     private void validateAccountAndPassword(String userAccount, String userPassword) {
@@ -376,6 +415,10 @@ public class UserServiceImpl implements UserService {
         if (limit <= 0 || limit > MAX_RECOMMENDATION_LIMIT) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "推荐数量必须为 1 到 50");
         }
+    }
+
+    private void refreshOnlineStatus(List<UserVO> users) {
+        users.forEach(user -> user.setIsOnline(onlineUserService.isOnline(user.getId())));
     }
 
     private List<String> normalizeTags(List<String> tagList) {

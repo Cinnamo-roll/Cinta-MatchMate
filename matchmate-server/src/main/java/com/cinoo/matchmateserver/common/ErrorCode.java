@@ -13,6 +13,10 @@ public enum ErrorCode {
     NOT_LOGIN(40100, HttpStatus.UNAUTHORIZED, "Not logged in", ""),
     NO_AUTH(40300, HttpStatus.FORBIDDEN, "No permission", ""),
     NOT_FOUND(40400, HttpStatus.NOT_FOUND, "Resource not found", ""),
+    FILE_SIZE_EXCEEDED(41300, HttpStatus.PAYLOAD_TOO_LARGE,
+            "File size exceeds limit", "头像大小不能超过 5MB"),
+    FILE_TYPE_ERROR(41500, HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+            "Unsupported file type", "仅支持 JPG、PNG、GIF、WebP 图片"),
     SYSTEM_ERROR(50000, HttpStatus.INTERNAL_SERVER_ERROR, "Internal system error", "");
 
     private final int code;

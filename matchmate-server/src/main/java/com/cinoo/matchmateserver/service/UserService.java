@@ -5,6 +5,7 @@ import com.cinoo.matchmateserver.model.domain.User;
 import com.cinoo.matchmateserver.model.request.UpdateUserProfileRequest;
 import com.cinoo.matchmateserver.model.vo.UserVO;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -140,4 +141,13 @@ public interface UserService {
      * @param request HTTP 请求
      */
     void deleteCurrentUser(String userPassword, HttpServletRequest request);
+
+    /**
+     * 上传当前用户头像至 OSS，同时更新数据库。
+     *
+     * @param file 头像图片文件
+     * @param request HTTP 请求
+     * @return 更新后的用户信息
+     */
+    UserVO uploadAvatar(MultipartFile file, HttpServletRequest request);
 }

@@ -19,6 +19,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -150,5 +152,13 @@ public class UserController {
             HttpServletRequest request) {
         userService.deleteCurrentUser(deleteRequest.getUserPassword(), request);
         return ResultUtils.success(null);
+    }
+
+    @Operation(summary = "上传头像", description = "上传当前用户头像图片至 OSS")
+    @PostMapping(value = "/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public BaseResponse<UserVO> uploadAvatar(
+            @RequestPart("file") MultipartFile file,
+            HttpServletRequest request) {
+        return ResultUtils.success(userService.uploadAvatar(file, request));
     }
 }

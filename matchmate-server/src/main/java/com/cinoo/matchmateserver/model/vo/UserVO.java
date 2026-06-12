@@ -25,4 +25,5 @@ public class UserVO implements Serializable {
     private Date createTime;
     private Integer userRole;
     private List<String> userTags;
+    private Boolean isOnline;
 }

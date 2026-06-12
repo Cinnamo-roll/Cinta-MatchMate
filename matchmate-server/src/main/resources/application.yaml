@@ -1,6 +1,11 @@
 spring:
   application:
     name: matchmate-server
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 5MB
+      max-request-size: 5MB
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/matchmate}
     username: ${DB_USERNAME:root}
@@ -51,6 +56,8 @@ management:
       enabled: true
 
 matchmate:
+  cors:
+    allowed-origins: ${MATCHMATE_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost,capacitor://localhost}
   cache:
     enabled: ${CACHE_ENABLED:true}
     lock-wait: 2s
@@ -61,3 +68,11 @@ matchmate:
     schedule:
       recommendation-refresh: ${CACHE_RECOMMENDATION_REFRESH:3m}
       category-refresh: ${CACHE_CATEGORY_REFRESH:1h}
+
+aliyun:
+  oss:
+    endpoint: ${OSS_ENDPOINT:}
+    access-key-id: ${OSS_ACCESS_KEY_ID:}
+    access-key-secret: ${OSS_ACCESS_KEY_SECRET:}
+    bucket-name: ${OSS_BUCKET_NAME:}
+    public-base-url: ${OSS_PUBLIC_BASE_URL:}

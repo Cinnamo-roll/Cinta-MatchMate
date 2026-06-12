@@ -11,13 +11,16 @@ import com.cinoo.matchmateserver.model.domain.User;
 import com.cinoo.matchmateserver.model.request.UpdateUserProfileRequest;
 import com.cinoo.matchmateserver.model.vo.UserVO;
 import com.cinoo.matchmateserver.service.impl.UserServiceImpl;
+import com.cinoo.matchmateserver.utils.OssUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockMultipartFile;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -43,6 +46,12 @@ class UserServiceTest {
     @Mock
     private CacheInvalidationService cacheInvalidationService;
 
+    @Mock
+    private OssUtils ossUtils;
+
+    @Mock
+    private OnlineUserService onlineUserService;
+
     private PasswordService passwordService;
     private UserService userService;
 
@@ -59,7 +68,9 @@ class UserServiceTest {
                 passwordService,
                 tagService,
                 cacheService,
-                cacheInvalidationService
+                cacheInvalidationService,
+                ossUtils,
+                onlineUserService
         );
     }
 
@@ -284,6 +295,66 @@ class UserServiceTest {
 
         assertEquals("当前密码错误", exception.getDescription());
         verify(userMapper, never()).updateById(any(User.class));
+    }
+
+    @Test
+    void uploadAvatarPersistsNewUrlBeforeDeletingOldObject() {
+        User user = activeUser();
+        user.setAvatarUrl("https://cdn.example.com/avatars/1/old.jpg");
+        User updatedUser = activeUser();
+        updatedUser.setAvatarUrl("https://cdn.example.com/avatars/1/new.jpg");
+        when(userMapper.selectById(user.getId()))
+                .thenReturn(user)
+                .thenReturn(updatedUser);
+        when(ossUtils.uploadAvatar(eq(user.getId()), any()))
+                .thenReturn(updatedUser.getAvatarUrl());
+        when(userMapper.updateById(any(User.class))).thenReturn(1);
+        MockHttpServletRequest request = loggedInRequest(user.getId());
+
+        UserVO result = userService.uploadAvatar(
+                new MockMultipartFile("file", "avatar.jpg", "image/jpeg", new byte[]{1}),
+                request
+        );
+
+        assertEquals(updatedUser.getAvatarUrl(), result.getAvatarUrl());
+        InOrder order = inOrder(ossUtils, userMapper);
+        order.verify(ossUtils).uploadAvatar(eq(user.getId()), any());
+        order.verify(userMapper).updateById(any(User.class));
+        order.verify(ossUtils).deleteIfManaged(user.getAvatarUrl());
+        verify(cacheInvalidationService).userChanged(user.getId());
+    }
+
+    @Test
+    void uploadAvatarDeletesNewObjectWhenDatabaseUpdateFails() {
+        User user = activeUser();
+        user.setAvatarUrl("https://cdn.example.com/avatars/1/old.jpg");
+        String newAvatarUrl = "https://cdn.example.com/avatars/1/new.jpg";
+        when(userMapper.selectById(user.getId())).thenReturn(user);
+        when(ossUtils.uploadAvatar(eq(user.getId()), any())).thenReturn(newAvatarUrl);
+        when(userMapper.updateById(any(User.class))).thenReturn(0);
+
+        assertThrows(
+                BusinessException.class,
+                () -> userService.uploadAvatar(
+                        new MockMultipartFile(
+                                "file",
+                                "avatar.jpg",
+                                "image/jpeg",
+                                new byte[]{1}
+                        ),
+                        loggedInRequest(user.getId())
+                )
+        );
+
+        verify(ossUtils).deleteIfManaged(newAvatarUrl);
+        verify(ossUtils, never()).deleteIfManaged(user.getAvatarUrl());
+        verify(cacheInvalidationService, never()).userChanged(anyLong());
+    }
+
+    private MockHttpServletRequest loggedInRequest(long userId) {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.getSession().setAttribute(UserConstant.USER_LOGIN_STATE, userId);
+        return request;
     }
 
     private User activeUser() {

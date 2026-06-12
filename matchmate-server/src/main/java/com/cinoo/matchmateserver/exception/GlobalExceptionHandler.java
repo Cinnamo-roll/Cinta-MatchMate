@@ -11,10 +11,12 @@ import org.springframework.validation.BindingResult;
 import org.springframework.validation.BindException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.Objects;
@@ -60,12 +62,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             HttpMessageNotReadableException.class,
             MissingServletRequestParameterException.class,
+            MissingServletRequestPartException.class,
             MethodArgumentTypeMismatchException.class
     })
     public ResponseEntity<BaseResponse<Void>> handleBadRequest(Exception e) {
         String message;
         if (e instanceof MissingServletRequestParameterException missingParameter) {
             message = "缺少必要参数: " + missingParameter.getParameterName();
+        } else if (e instanceof MissingServletRequestPartException missingPart) {
+            message = "缺少必要文件: " + missingPart.getRequestPartName();
         } else if (e instanceof MethodArgumentTypeMismatchException mismatch) {
             message = "参数类型错误: " + mismatch.getName();
         } else {
@@ -91,6 +96,15 @@ public class GlobalExceptionHandler {
         String message = "不支持的请求方法: " + Objects.toString(e.getMethod(), "");
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
                 .body(ResultUtils.error(ErrorCode.PARAM_ERROR, message, ""));
+    }
+
+    /**
+     * 上传文件大小超出限制处理
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<BaseResponse<Void>> handleMaxUploadSizeExceeded() {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(ResultUtils.error(ErrorCode.FILE_SIZE_EXCEEDED));
     }
 
     /**
