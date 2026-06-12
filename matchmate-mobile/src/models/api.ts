@@ -28,3 +28,9 @@ export type UpdateUserProfileRequest = {
   phone?: string;
   email?: string;
 };
+
+export type UpdatePasswordRequest = {
+  currentPassword: string;
+  newPassword: string;
+  checkPassword: string;
+};

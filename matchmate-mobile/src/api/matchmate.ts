@@ -6,6 +6,7 @@ import type {
   RegisterRequest,
   TagCategory,
   UpdateUserProfileRequest,
+  UpdatePasswordRequest,
 } from '../models/api';
 import type { User } from '../models/user';
 
@@ -50,6 +51,10 @@ export const getCurrentUser = async () =>
 
 export const updateCurrentUser = async (request: UpdateUserProfileRequest) =>
   unwrap(await myAxios.put<BaseResponse<User>>('/user/current', request));
+
+export const updateCurrentUserPassword = async (request: UpdatePasswordRequest) => {
+  await myAxios.put<BaseResponse<null>>('/user/password', request);
+};
 
 export const updateCurrentUserTags = async (tagList: string[]) =>
   unwrap(

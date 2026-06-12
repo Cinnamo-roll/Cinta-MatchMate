@@ -10,6 +10,7 @@ import {
   logout,
   updateCurrentUser,
   updateCurrentUserTags,
+  updateCurrentUserPassword,
   deleteCurrentUser,
 } from '../api/matchmate';
 import type { UpdateUserProfileRequest } from '../models/api';
@@ -173,6 +174,57 @@ const saveUserTags = async () => {
 const showMenu = ref(false);
 const closeMenu = () => { showMenu.value = false; };
 
+const showPasswordPopup = ref(false);
+const currentPassword = ref('');
+const newPassword = ref('');
+const checkPassword = ref('');
+const isUpdatingPassword = ref(false);
+
+const openPasswordPopup = () => {
+  showMenu.value = false;
+  currentPassword.value = '';
+  newPassword.value = '';
+  checkPassword.value = '';
+  showPasswordPopup.value = true;
+};
+
+const confirmUpdatePassword = async () => {
+  if (!currentPassword.value || !newPassword.value || !checkPassword.value) {
+    showNotify('请完整填写密码信息');
+    return;
+  }
+  if (newPassword.value.length < 8 || newPassword.value.length > 64) {
+    showNotify('新密码长度必须为 8 到 64 位');
+    return;
+  }
+  if (newPassword.value !== checkPassword.value) {
+    showNotify('两次输入的新密码不一致');
+    return;
+  }
+  if (currentPassword.value === newPassword.value) {
+    showNotify('新密码不能与当前密码相同');
+    return;
+  }
+
+  try {
+    isUpdatingPassword.value = true;
+    await updateCurrentUserPassword({
+      currentPassword: currentPassword.value,
+      newPassword: newPassword.value,
+      checkPassword: checkPassword.value,
+    });
+    showPasswordPopup.value = false;
+    showNotify('密码修改成功', 'success');
+  } catch (error) {
+    const message = axios.isAxiosError(error)
+      ? error.response?.data?.description
+      : '';
+    showNotify(message || '密码修改失败');
+  } finally {
+    isUpdatingPassword.value = false;
+  }
+};
+
 const showDeletePopup = ref(false);
 const deletePassword = ref('');
 const deleteStep = ref<'password' | 'confirm'>('password');
@@ -226,9 +278,18 @@ onBeforeUnmount(() => {
 
     <template v-else-if="user">
       <div class="top-menu">
-        <van-icon name="ellipsis" size="22" @click.stop="showMenu = !showMenu" />
+        <van-icon
+          name="ellipsis"
+          size="22"
+          role="button"
+          tabindex="0"
+          aria-label="更多操作"
+          @click.stop="showMenu = !showMenu"
+          @keyup.enter.stop="showMenu = !showMenu"
+        />
         <div v-if="showMenu" class="dropdown-menu" @click.stop>
           <div class="dropdown-item" @click="showMenu = false; handleLogout()">退出登录</div>
+          <div class="dropdown-item" @click="openPasswordPopup">修改密码</div>
           <div class="dropdown-item dropdown-item--danger" @click="openDeletePopup">注销账户</div>
         </div>
       </div>
@@ -392,6 +453,52 @@ onBeforeUnmount(() => {
           </van-button>
         </div>
       </div>
+  </van-popup>
+
+  <van-popup
+    v-model:show="showPasswordPopup"
+    position="bottom"
+    round
+    closeable
+  >
+    <div class="password-popup">
+      <h3>修改密码</h3>
+      <p class="password-desc">修改后请使用新密码登录</p>
+      <van-field
+        v-model="currentPassword"
+        type="password"
+        label="当前密码"
+        placeholder="请输入当前密码"
+        maxlength="64"
+        clearable
+      />
+      <van-field
+        v-model="newPassword"
+        type="password"
+        label="新密码"
+        placeholder="请输入 8 到 64 位新密码"
+        maxlength="64"
+        clearable
+      />
+      <van-field
+        v-model="checkPassword"
+        type="password"
+        label="确认密码"
+        placeholder="请再次输入新密码"
+        maxlength="64"
+        clearable
+        @keyup.enter="confirmUpdatePassword"
+      />
+      <van-button
+        block
+        type="primary"
+        :loading="isUpdatingPassword"
+        loading-text="修改中..."
+        @click="confirmUpdatePassword"
+      >
+        确认修改
+      </van-button>
+    </div>
   </van-popup>
 
   <van-popup
@@ -621,15 +728,18 @@ onBeforeUnmount(() => {
   box-shadow: 0 -2px 8px rgb(0 0 0 / 5%);
 }
 
+.password-popup,
 .delete-popup {
   padding: 20px 16px 24px;
 }
 
+.password-popup h3,
 .delete-popup h3 {
   margin: 0 0 8px;
   text-align: center;
 }
 
+.password-desc,
 .delete-desc {
   margin: 0 0 16px;
   color: #969799;
@@ -637,6 +747,7 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 
+.password-popup .van-button,
 .delete-popup .van-button {
   margin-top: 16px;
 }
