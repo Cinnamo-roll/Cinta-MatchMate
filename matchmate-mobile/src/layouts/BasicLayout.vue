@@ -1,29 +1,32 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useNotify } from '../composables/useNotify';
+import { useWebSocket } from '../composables/useWebSocket';
 
-type TabName = 'index' | 'team' | 'user';
+type TabName = 'index' | 'message' | 'user';
 
 const route = useRoute();
 const router = useRouter();
 const { message: notifyMsg, type: notifyType } = useNotify();
+const { connect, disconnect } = useWebSocket();
 
 const tabRoutes: Record<TabName, string> = {
   index: '/',
-  team: '/team',
+  message: '/team',
   user: '/user',
 };
 
 const title = computed(() => String(route.meta.title ?? 'MatchMate'));
 const showBack = computed(() => Boolean(route.meta.showBack));
 const showSearch = computed(() => Boolean(route.meta.showSearch));
+const showNavbar = computed(() => !route.meta.hideNavbar);
 const showTabbar = computed(() => !route.meta.hideTabbar);
 const lockScroll = computed(() => Boolean(route.meta.lockScroll));
 const activeTab = computed<TabName>({
   get: () => {
     if (route.meta.tabbar === 'user') return 'user';
-    if (route.path === '/team') return 'team';
+    if (route.path === '/team') return 'message';
     if (route.path === '/user') return 'user';
     return 'index';
   },
@@ -52,7 +55,8 @@ const setDocumentScrollLock = (locked: boolean) => {
 };
 
 watch(lockScroll, setDocumentScrollLock, { immediate: true });
-onBeforeUnmount(() => setDocumentScrollLock(false));
+onMounted(() => connect());
+onBeforeUnmount(() => { setDocumentScrollLock(false); disconnect(); });
 </script>
 
 <template>
@@ -61,6 +65,7 @@ onBeforeUnmount(() => setDocumentScrollLock(false));
     :class="{ 'basic-layout--locked': lockScroll }"
   >
     <van-nav-bar
+      v-if="showNavbar"
       :title="title"
       :left-arrow="showBack"
       :left-text="showBack ? '返回' : ''"
@@ -81,7 +86,10 @@ onBeforeUnmount(() => setDocumentScrollLock(false));
 
     <main
       class="layout-content"
-      :class="{ 'layout-content--locked': lockScroll }"
+      :class="{
+        'layout-content--locked': lockScroll,
+        'layout-content--full': !showNavbar,
+      }"
     >
       <router-view />
     </main>
@@ -94,8 +102,8 @@ onBeforeUnmount(() => setDocumentScrollLock(false));
       <van-tabbar-item icon="home-o" name="index">
         主页
       </van-tabbar-item>
-      <van-tabbar-item icon="friends-o" name="team">
-        队伍
+      <van-tabbar-item icon="chat-o" name="message">
+        消息
       </van-tabbar-item>
       <van-tabbar-item icon="contact-o" name="user">
         我的
@@ -139,6 +147,10 @@ onBeforeUnmount(() => setDocumentScrollLock(false));
   overflow: hidden;
   overscroll-behavior: none;
   touch-action: none;
+}
+
+.layout-content--locked.layout-content--full {
+  height: 100dvh;
 }
 
 .bottom-notify {

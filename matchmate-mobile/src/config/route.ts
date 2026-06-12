@@ -4,11 +4,17 @@ import Register from '../pages/Register.vue';
 import Search from '../pages/Search.vue';
 import Team from '../pages/Team.vue';
 import User from '../pages/User.vue';
+import ChatDetail from '../pages/ChatDetail.vue';
 
 const routes = [
   { path: '/', component: Index, meta: { title: 'MatchMate' } },
-  { path: '/team', component: Team, meta: { title: '队伍' } },
+  { path: '/team', component: Team, meta: { title: '消息' } },
   { path: '/user', component: User, meta: { title: '我的', lockScroll: true } },
+  {
+    path: '/chat/:id',
+    component: ChatDetail,
+    meta: { title: '聊天', hideNavbar: true, hideTabbar: true, lockScroll: true },
+  },
   {
     path: '/search',
     component: Search,

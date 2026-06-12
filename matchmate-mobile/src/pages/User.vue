@@ -12,11 +12,12 @@ import {
   updateCurrentUserTags,
   updateCurrentUserPassword,
   deleteCurrentUser,
+  uploadAvatar,
 } from '../api/matchmate';
 import type { UpdateUserProfileRequest } from '../models/api';
 import type { User } from '../models/user';
 
-type EditableUserField = 'username' | 'avatarUrl' | 'gender' | 'phone' | 'email';
+type EditableUserField = 'username' | 'gender' | 'phone' | 'email';
 
 type UserField = {
   key: keyof User;
@@ -34,18 +35,20 @@ const fields: UserField[] = [
   { key: 'userAccount', label: '账号' },
   { key: 'userRole', label: '角色' },
   { key: 'username', label: '昵称', editable: true },
-  { key: 'avatarUrl', label: '头像地址', editable: true, inputType: 'url' },
   { key: 'gender', label: '性别', editable: true },
   { key: 'phone', label: '手机', editable: true, inputType: 'tel' },
   { key: 'email', label: '邮箱', editable: true, inputType: 'email' },
   { key: 'createTime', label: '加入时间' },
 ];
 
-const avatarField = fields.find((field) => field.key === 'avatarUrl')!;
 const showEditor = ref(false);
 const editingField = ref<UserField | null>(null);
 const editingValue = ref('');
 const isSubmitting = ref(false);
+
+const avatarFileInput = ref<HTMLInputElement | null>(null);
+const previewAvatarUrl = ref<string | null>(null);
+const isUploadingAvatar = ref(false);
 
 const showTagEditor = ref(false);
 const { categories, draftTags, loadCategories, isTagSelected, toggleTag: toggleUserTag } = useTagSelection(MAX_TAGS);
@@ -267,7 +270,54 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', closeMenu);
+  if (previewAvatarUrl.value) {
+    URL.revokeObjectURL(previewAvatarUrl.value);
+  }
 });
+
+const onAvatarClick = () => {
+  if (isUploadingAvatar.value) return;
+  avatarFileInput.value?.click();
+};
+
+const onAvatarFileSelected = async (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+
+  const maxSize = 5 * 1024 * 1024;
+  if (file.size > maxSize) {
+    showNotify('图片大小不能超过 5MB');
+    input.value = '';
+    return;
+  }
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+  if (!allowedTypes.includes(file.type)) {
+    showNotify('仅支持 JPG、PNG、GIF、WebP 格式');
+    input.value = '';
+    return;
+  }
+
+  previewAvatarUrl.value = URL.createObjectURL(file);
+
+  try {
+    isUploadingAvatar.value = true;
+    user.value = await uploadAvatar(file);
+    showNotify('头像更新成功', 'success');
+  } catch (error) {
+    const message = axios.isAxiosError(error)
+      ? error.response?.data?.description
+      : '';
+    showNotify(message || '头像上传失败');
+  } finally {
+    isUploadingAvatar.value = false;
+    if (previewAvatarUrl.value) {
+      URL.revokeObjectURL(previewAvatarUrl.value);
+      previewAvatarUrl.value = null;
+    }
+    input.value = '';
+  }
+};
 </script>
 
 <template>
@@ -295,18 +345,33 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="avatar-wrapper">
-        <div class="avatar-clickable" @click="openEditor(avatarField)">
+        <input
+          ref="avatarFileInput"
+          type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp"
+          style="display: none"
+          @change="onAvatarFileSelected"
+        />
+        <div class="avatar-clickable" @click="onAvatarClick">
           <van-image
             round
             width="80"
             height="80"
             fit="cover"
-            :src="user.avatarUrl || undefined"
+            :src="previewAvatarUrl || user.avatarUrl || undefined"
           >
             <template #error>
               <van-icon name="contact-o" size="38" />
             </template>
           </van-image>
+          <div class="avatar-overlay">
+            <van-loading
+              v-if="isUploadingAvatar"
+              size="24"
+              color="#fff"
+            />
+            <van-icon v-else name="photograph" size="22" />
+          </div>
         </div>
       </div>
 
@@ -561,7 +626,10 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: 2001;
   display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
+  gap: 8px;
   padding: 24px 0;
   background: #fff;
 }
@@ -579,6 +647,27 @@ onBeforeUnmount(() => {
   opacity: 0.7;
   transform: scale(0.95);
   transition: opacity 0.15s, transform 0.15s;
+}
+
+.avatar-overlay {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  color: #fff;
+  background: rgb(25 137 250 / 90%);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.avatar-hint {
+  color: #969799;
+  font-size: 12px;
 }
 
 .field-value {

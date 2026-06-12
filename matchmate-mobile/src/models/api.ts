@@ -23,7 +23,6 @@ export type RegisterRequest = {
 
 export type UpdateUserProfileRequest = {
   username?: string;
-  avatarUrl?: string;
   gender?: number;
   phone?: string;
   email?: string;

@@ -10,4 +10,5 @@ export type User = {
   userRole: number;
   userTags: string[];
   createTime: string;
+  isOnline: boolean | null;
 };

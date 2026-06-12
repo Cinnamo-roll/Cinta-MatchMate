@@ -1,27 +1,55 @@
 <script setup lang="ts">
+import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import type { User } from '../models/user';
 import { getGenderText, isAdmin } from '../utils/user';
+import { getCurrentUser } from '../api/matchmate';
 
 defineProps<{
   user: User;
   highlightedTags?: string[];
 }>();
+
+const router = useRouter();
+const myId = ref<number | null>(null);
+
+const startChat = (user: User) => {
+  router.push({
+    path: '/chat/0',
+    query: {
+      targetUserId: user.id,
+      username: (user.username || user.userAccount),
+      avatar: user.avatarUrl,
+      isOnline: String(Boolean(user.isOnline)),
+    },
+  });
+};
+
+onMounted(async () => {
+  try {
+    const me = await getCurrentUser();
+    myId.value = me?.id ?? null;
+  } catch { /* 未登录 */ }
+});
 </script>
 
 <template>
   <article class="user-card">
-    <van-image
-      class="user-avatar"
-      round
-      width="64"
-      height="64"
-      fit="cover"
-      :src="user.avatarUrl || undefined"
-    >
-      <template #error>
-        <van-icon name="contact-o" size="30" />
-      </template>
-    </van-image>
+    <div class="avatar-wrap">
+      <van-image
+        class="user-avatar"
+        round
+        width="56"
+        height="56"
+        fit="cover"
+        :src="user.avatarUrl || undefined"
+      >
+        <template #error>
+          <van-icon name="contact-o" size="28" />
+        </template>
+      </van-image>
+      <span v-if="user.isOnline" class="online-dot" />
+    </div>
 
     <div class="user-info">
       <div class="user-heading">
@@ -49,6 +77,15 @@ defineProps<{
         <span v-if="user.userTags.length === 0" class="no-tags">暂无标签</span>
       </div>
     </div>
+
+    <van-icon
+      v-if="user.isOnline && user.id !== myId"
+      name="chat-o"
+      size="22"
+      color="#07c160"
+      class="chat-icon"
+      @click.stop="startChat(user)"
+    />
   </article>
 </template>
 
@@ -67,8 +104,24 @@ defineProps<{
   box-sizing: border-box;
 }
 
+.avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
 .user-avatar {
   flex-shrink: 0;
+}
+
+.online-dot {
+  position: absolute;
+  bottom: 1px;
+  right: 1px;
+  width: 14px;
+  height: 14px;
+  background: #07c160;
+  border: 2px solid #fff;
+  border-radius: 50%;
 }
 
 .user-info {
@@ -140,5 +193,13 @@ defineProps<{
 .no-tags {
   color: #969799;
   font-size: 13px;
+}
+
+.chat-icon {
+  flex-shrink: 0;
+  padding: 8px;
+  margin: -8px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 </style>

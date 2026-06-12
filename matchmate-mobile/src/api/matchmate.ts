@@ -13,6 +13,8 @@ import type { User } from '../models/user';
 const unwrap = <T>(response: AxiosResponse<BaseResponse<T>>) =>
   response.data.data;
 
+let currentUserRequest: Promise<User> | null = null;
+
 export const getTagCategories = async () =>
   unwrap(await myAxios.get<BaseResponse<TagCategory[]>>('/tag/categories'));
 
@@ -46,8 +48,17 @@ export const logout = async () => {
   await myAxios.post<BaseResponse<null>>('/user/logout');
 };
 
-export const getCurrentUser = async () =>
-  unwrap(await myAxios.get<BaseResponse<User>>('/user/current'));
+export const getCurrentUser = () => {
+  if (!currentUserRequest) {
+    currentUserRequest = myAxios
+      .get<BaseResponse<User>>('/user/current')
+      .then(unwrap)
+      .finally(() => {
+        currentUserRequest = null;
+      });
+  }
+  return currentUserRequest;
+};
 
 export const updateCurrentUser = async (request: UpdateUserProfileRequest) =>
   unwrap(await myAxios.put<BaseResponse<User>>('/user/current', request));
@@ -69,3 +80,11 @@ export const deleteCurrentUser = async (userPassword: string) =>
       data: { userPassword },
     }),
   );
+
+export const uploadAvatar = async (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return unwrap(
+    await myAxios.post<BaseResponse<User>>('/user/avatar', formData),
+  );
+};
