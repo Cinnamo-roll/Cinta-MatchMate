@@ -3,11 +3,14 @@ package com.cinta.matchmateserver.constant;
 /**
  * 用户模块常量。
  */
-public interface UserConstant {
+public final class UserConstant {
 
-    String USER_LOGIN_STATE = "userLoginState";
+    private UserConstant() {
+    }
 
-    int ADMIN_ROLE = 1;
+    public static final String USER_LOGIN_STATE = "userLoginState";
 
-    int DEFAULT_ROLE = 0;
+    public static final int ADMIN_ROLE = 1;
+
+    public static final int DEFAULT_ROLE = 0;
 }

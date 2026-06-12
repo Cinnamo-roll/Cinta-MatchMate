@@ -2,24 +2,33 @@ spring:
   application:
     name: matchmate-server
   datasource:
-    driver-class-name: com.mysql.cj.jdbc.Driver
     url: ${DB_URL:jdbc:mysql://localhost:3306/matchmate}
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      connect-timeout: 3s
+      timeout: 3s
+      repositories:
+        enabled: false
+  session:
+    timeout: 24h
+    data:
+      redis:
+        namespace: matchmate:session
+
 server:
-  port: 8080
   servlet:
     context-path: /api
     session:
-      timeout: 86400s
       cookie:
         http-only: true
         same-site: lax
+
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: false
-  global-config:
-    db-config:
-      logic-delete-field: isDelete # 全局逻辑删除字段名(deleted为实体类属性名称)
-      logic-delete-value: 1 # 逻辑已删除值。可选，默认值为 1
-      logic-not-delete-value: 0 # 逻辑未删除值。可选，默认值为 0
