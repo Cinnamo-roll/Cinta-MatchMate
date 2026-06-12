@@ -2,9 +2,9 @@
 <!DOCTYPE mapper
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.cinta.matchmateserver.mapper.UserMapper">
+<mapper namespace="com.cinoo.matchmateserver.mapper.UserMapper">
 
-    <resultMap id="BaseResultMap" type="com.cinta.matchmateserver.model.domain.User">
+    <resultMap id="BaseResultMap" type="com.cinoo.matchmateserver.model.domain.User">
             <id property="id" column="id" />
             <result property="username" column="username" />
             <result property="userAccount" column="userAccount" />
