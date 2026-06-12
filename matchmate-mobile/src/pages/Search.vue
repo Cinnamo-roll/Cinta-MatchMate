@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { MAX_TAGS } from '../utils/user';
 import { useNotify } from '../composables/useNotify';
 import { useTagSelection } from '../composables/useTagSelection';
@@ -14,6 +14,7 @@ const showFilter = ref(false);
 const activeCategoryName = ref('');
 const loading = ref(false);
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
+let latestRequestId = 0;
 
 const { showNotify } = useNotify();
 const { categories, draftTags, loadCategories, isTagSelected: isDraftSelected, toggleTag: toggleDraftTag } = useTagSelection(MAX_TAGS);
@@ -39,18 +40,27 @@ watch([selectedTags, users], updateHeaderHeight);
 
 
 const loadUsers = async () => {
+  const requestId = ++latestRequestId;
   try {
     loading.value = true;
     // TODO: 后期改为基于大数据的智能推荐算法
+    let results: User[];
     if (!keyword.value.trim() && selectedTags.value.length === 0) {
-      users.value = await recommendUsers(8);
+      results = await recommendUsers(8);
     } else {
-      users.value = await searchUsers(keyword.value, selectedTags.value);
+      results = await searchUsers(keyword.value, selectedTags.value);
+    }
+    if (requestId === latestRequestId) {
+      users.value = results;
     }
   } catch {
-    showNotify('搜索失败，请稍后重试');
+    if (requestId === latestRequestId) {
+      showNotify('搜索失败，请稍后重试');
+    }
   } finally {
-    loading.value = false;
+    if (requestId === latestRequestId) {
+      loading.value = false;
+    }
   }
 };
 
@@ -80,6 +90,11 @@ const resetSearch = () => {
 watch(keyword, () => {
   if (searchTimer) clearTimeout(searchTimer);
   searchTimer = setTimeout(loadUsers, 350);
+});
+
+onBeforeUnmount(() => {
+  latestRequestId += 1;
+  if (searchTimer) clearTimeout(searchTimer);
 });
 
 onMounted(async () => {
