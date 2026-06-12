@@ -18,4 +18,17 @@ public interface UserMapper extends BaseMapper<User> {
     );
 
     List<User> recommendUsers(@Param("limit") int limit);
+
+    /**
+     * 查询全体用户积分排名。
+     */
+    List<User> selectCardRanking(@Param("limit") int limit);
+
+    /**
+     * 原子累加用户统计。
+     */
+    int addStats(@Param("userId") Long userId,
+                 @Param("totalScore") int totalScore,
+                 @Param("wins") int wins,
+                 @Param("losses") int losses);
 }

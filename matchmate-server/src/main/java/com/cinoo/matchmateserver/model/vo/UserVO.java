@@ -26,4 +26,8 @@ public class UserVO implements Serializable {
     private Integer userRole;
     private List<String> userTags;
     private Boolean isOnline;
+    private Integer totalScore;
+    private Integer wins;
+    private Integer losses;
+    private java.math.BigDecimal winRate;
 }

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cinoo.matchmateserver.mapper.CardRoomMapper">
+
+    <select id="selectActiveRoomByUserId" resultType="com.cinoo.matchmateserver.model.domain.CardRoom">
+        SELECT cr.*
+        FROM cardRoom cr
+        JOIN cardRoomMember crm ON cr.id = crm.roomId
+        WHERE crm.userId = #{userId}
+          AND crm.status = 0
+          AND cr.status = 0
+          AND cr.isDelete = 0
+        LIMIT 1
+    </select>
+
+    <select id="selectActiveMemberIds" resultType="long">
+        SELECT userId
+        FROM cardRoomMember
+        WHERE roomId = #{roomId}
+          AND status = 0
+    </select>
+
+    <select id="selectHistoryByUserId"
+            resultType="com.cinoo.matchmateserver.model.vo.CardRoomHistoryVO">
+        SELECT cr.id AS roomId,
+               cr.roomCode,
+               owner.username AS ownerName,
+               cr.status,
+               (SELECT COUNT(*) FROM cardRoomMember count_member
+                WHERE count_member.roomId = cr.id) AS memberCount,
+               COALESCE(crm.settleScore, crm.totalScore, 0) AS score,
+               cr.createTime,
+               cr.settleTime
+        FROM cardRoom cr
+        JOIN cardRoomMember crm ON crm.roomId = cr.id
+        LEFT JOIN user owner ON owner.id = cr.ownerId
+        WHERE crm.userId = #{userId}
+          AND cr.isDelete = 0
+        ORDER BY cr.createTime DESC, cr.id DESC
+        LIMIT #{limit}
+    </select>
+
+</mapper>

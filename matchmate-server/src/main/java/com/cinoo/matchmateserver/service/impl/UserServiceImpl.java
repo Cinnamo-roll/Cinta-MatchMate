@@ -144,6 +144,10 @@ public class UserServiceImpl implements UserService {
         userVO.setUserRole(user.getUserRole());
         userVO.setUserTags(tagService.getUserTagNames(user.getId()));
         userVO.setIsOnline(onlineUserService.isOnline(user.getId()));
+        userVO.setTotalScore(user.getTotalScore());
+        userVO.setWins(user.getWins());
+        userVO.setLosses(user.getLosses());
+        userVO.setWinRate(user.getWinRate());
         return userVO;
     }
 

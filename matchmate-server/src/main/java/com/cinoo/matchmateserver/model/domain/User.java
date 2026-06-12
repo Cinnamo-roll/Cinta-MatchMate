@@ -82,4 +82,24 @@ public class User {
      */
     private Integer userRole;
 
+    /**
+     * 累计积分。
+     */
+    private Integer totalScore;
+
+    /**
+     * 累计胜局。
+     */
+    private Integer wins;
+
+    /**
+     * 累计负局。
+     */
+    private Integer losses;
+
+    /**
+     * 胜率。
+     */
+    private java.math.BigDecimal winRate;
+
 }

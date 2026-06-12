@@ -18,12 +18,16 @@
             <result property="updateTime" column="updateTime" />
             <result property="isDelete" column="isDelete" />
             <result property="userRole" column="userRole" />
+            <result property="totalScore" column="totalScore" />
+            <result property="wins" column="wins" />
+            <result property="losses" column="losses" />
+            <result property="winRate" column="winRate" />
     </resultMap>
 
     <sql id="Base_Column_List">
         id,username,userAccount,avatarUrl,gender,userPassword,
         phone,email,userStatus,createTime,updateTime,
-        isDelete,userRole
+        isDelete,userRole,totalScore,wins,losses,winRate
     </sql>
 
     <select id="searchByKeywordAndTags" resultMap="BaseResultMap">
@@ -69,4 +73,25 @@
         ORDER BY RAND()
         LIMIT #{limit}
     </select>
+
+    <select id="selectCardRanking" resultMap="BaseResultMap">
+        SELECT u.*
+        FROM user u
+        WHERE u.isDelete = 0
+        ORDER BY u.totalScore DESC, u.wins DESC, u.id ASC
+        LIMIT #{limit}
+    </select>
+
+    <update id="addStats">
+        UPDATE user
+        SET totalScore = totalScore + #{totalScore},
+            wins = wins + #{wins},
+            losses = losses + #{losses},
+            winRate = CASE
+                WHEN (wins + #{wins} + losses + #{losses}) = 0 THEN 0.0000
+                ELSE ROUND((wins + #{wins}) / (wins + #{wins} + losses + #{losses}), 4)
+            END
+        WHERE id = #{userId}
+          AND isDelete = 0
+    </update>
 </mapper>
