@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useNotify } from '../composables/useNotify';
 import { useWebSocket } from '../composables/useWebSocket';
 
-type TabName = 'index' | 'message' | 'user';
+type TabName = 'index' | 'discover' | 'message' | 'user';
 
 const route = useRoute();
 const router = useRouter();
@@ -13,6 +13,7 @@ const { connect, disconnect } = useWebSocket();
 
 const tabRoutes: Record<TabName, string> = {
   index: '/',
+  discover: '/discover',
   message: '/team',
   user: '/user',
 };
@@ -26,6 +27,7 @@ const lockScroll = computed(() => Boolean(route.meta.lockScroll));
 const activeTab = computed<TabName>({
   get: () => {
     if (route.meta.tabbar === 'user') return 'user';
+    if (route.path === '/discover') return 'discover';
     if (route.path === '/team') return 'message';
     if (route.path === '/user') return 'user';
     return 'index';
@@ -101,6 +103,9 @@ onBeforeUnmount(() => { setDocumentScrollLock(false); disconnect(); });
     >
       <van-tabbar-item icon="home-o" name="index">
         主页
+      </van-tabbar-item>
+      <van-tabbar-item icon="apps-o" name="discover">
+        发现
       </van-tabbar-item>
       <van-tabbar-item icon="chat-o" name="message">
         消息

@@ -5,11 +5,25 @@ import Search from '../pages/Search.vue';
 import Team from '../pages/Team.vue';
 import User from '../pages/User.vue';
 import ChatDetail from '../pages/ChatDetail.vue';
+import Discover from '../pages/Discover.vue';
+import CardLedger from '../pages/CardLedger.vue';
+import CardRoom from '../pages/CardRoom.vue';
 
 const routes = [
   { path: '/', component: Index, meta: { title: 'MatchMate' } },
+  { path: '/discover', component: Discover, meta: { title: '发现' } },
   { path: '/team', component: Team, meta: { title: '消息' } },
   { path: '/user', component: User, meta: { title: '我的', lockScroll: true } },
+  {
+    path: '/discover/card-ledger',
+    component: CardLedger,
+    meta: { title: '打牌记账本', showBack: true, hideTabbar: true },
+  },
+  {
+    path: '/card-room/:id',
+    component: CardRoom,
+    meta: { title: '房间', showBack: true, hideTabbar: true },
+  },
   {
     path: '/chat/:id',
     component: ChatDetail,

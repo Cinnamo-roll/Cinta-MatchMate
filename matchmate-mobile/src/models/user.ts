@@ -11,4 +11,8 @@ export type User = {
   userTags: string[];
   createTime: string;
   isOnline: boolean | null;
+  totalScore: number;
+  wins: number;
+  losses: number;
+  winRate: number;
 };
