@@ -1,5 +1,8 @@
 package com.cinoo.matchmateserver.service;
 
+import com.cinoo.matchmateserver.cache.CacheInvalidationService;
+import com.cinoo.matchmateserver.cache.CacheNames;
+import com.cinoo.matchmateserver.cache.DistributedCacheService;
 import com.cinoo.matchmateserver.common.ErrorCode;
 import com.cinoo.matchmateserver.constant.UserConstant;
 import com.cinoo.matchmateserver.exception.BusinessException;
@@ -16,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
 import java.util.List;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -33,13 +37,30 @@ class UserServiceTest {
     @Mock
     private TagService tagService;
 
+    @Mock
+    private DistributedCacheService cacheService;
+
+    @Mock
+    private CacheInvalidationService cacheInvalidationService;
+
     private PasswordService passwordService;
     private UserService userService;
 
     @BeforeEach
     void setUp() {
         passwordService = new PasswordService();
-        userService = new UserServiceImpl(userMapper, passwordService, tagService);
+        lenient().when(cacheService.get(anyString(), anyString(), any()))
+                .thenAnswer(invocation -> {
+                    Supplier<?> loader = invocation.getArgument(2);
+                    return loader.get();
+                });
+        userService = new UserServiceImpl(
+                userMapper,
+                passwordService,
+                tagService,
+                cacheService,
+                cacheInvalidationService
+        );
     }
 
     @Test
@@ -58,6 +79,7 @@ class UserServiceTest {
         assertEquals(10L, userId);
         assertNotEquals(PASSWORD, captor.getValue().getUserPassword());
         assertTrue(passwordService.matches(PASSWORD, captor.getValue().getUserPassword()));
+        verify(cacheInvalidationService).userCollectionChanged();
     }
 
     @Test
@@ -141,6 +163,49 @@ class UserServiceTest {
         assertEquals(1, result.size());
         assertEquals(List.of("Java", "跑步"), result.get(0).getUserTags());
         verify(userMapper).searchByKeywordAndTags("test", List.of("Java", "跑步"), 2);
+        verify(cacheService, never()).get(
+                eq(CacheNames.USER_SEARCHES),
+                anyString(),
+                any()
+        );
+    }
+
+    @Test
+    void emptySearchUsesSharedCache() {
+        when(userMapper.searchByKeywordAndTags(null, List.of(), 0)).thenReturn(List.of());
+
+        userService.searchUserByTags("", List.of());
+
+        verify(cacheService).get(
+                eq(CacheNames.USER_SEARCHES),
+                anyString(),
+                any()
+        );
+    }
+
+    @Test
+    void recommendationRejectsUnboundedLimit() {
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> userService.recommendUsers(51)
+        );
+
+        assertEquals(ErrorCode.PARAM_ERROR.getCode(), exception.getCode());
+        verifyNoInteractions(userMapper);
+    }
+
+    @Test
+    void searchRejectsMoreThanThreeTags() {
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> userService.searchUserByTags(
+                        "",
+                        List.of("Java", "跑步", "摄影", "电影")
+                )
+        );
+
+        assertEquals(ErrorCode.PARAM_ERROR.getCode(), exception.getCode());
+        verifyNoInteractions(userMapper);
     }
 
     @Test

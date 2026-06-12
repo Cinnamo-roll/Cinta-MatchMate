@@ -1,6 +1,10 @@
 package com.cinoo.matchmateserver.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.cinoo.matchmateserver.cache.CacheInvalidationService;
+import com.cinoo.matchmateserver.cache.CacheKeys;
+import com.cinoo.matchmateserver.cache.CacheNames;
+import com.cinoo.matchmateserver.cache.DistributedCacheService;
 import com.cinoo.matchmateserver.common.ErrorCode;
 import com.cinoo.matchmateserver.exception.BusinessException;
 import com.cinoo.matchmateserver.mapper.TagMapper;
@@ -26,14 +30,38 @@ public class TagServiceImpl implements TagService {
 
     private final TagMapper tagMapper;
     private final UserTagMapper userTagMapper;
+    private final DistributedCacheService cacheService;
+    private final CacheInvalidationService cacheInvalidationService;
 
-    public TagServiceImpl(TagMapper tagMapper, UserTagMapper userTagMapper) {
+    public TagServiceImpl(
+            TagMapper tagMapper,
+            UserTagMapper userTagMapper,
+            DistributedCacheService cacheService,
+            CacheInvalidationService cacheInvalidationService) {
         this.tagMapper = tagMapper;
         this.userTagMapper = userTagMapper;
+        this.cacheService = cacheService;
+        this.cacheInvalidationService = cacheInvalidationService;
     }
 
     @Override
     public List<TagCategoryVO> listCategories() {
+        return cacheService.get(
+                CacheNames.TAG_CATEGORIES,
+                CacheKeys.ALL,
+                this::loadCategories
+        );
+    }
+
+    public List<TagCategoryVO> refreshCategoriesCache() {
+        return cacheService.refresh(
+                CacheNames.TAG_CATEGORIES,
+                CacheKeys.ALL,
+                this::loadCategories
+        );
+    }
+
+    private List<TagCategoryVO> loadCategories() {
         List<Tag> tags = tagMapper.selectList(
                 new LambdaQueryWrapper<Tag>()
                         .orderByAsc(Tag::getId)
@@ -45,9 +73,9 @@ public class TagServiceImpl implements TagService {
                     .add(tag.getTagName());
         }
 
-        return groupedTags.entrySet().stream()
+        return new ArrayList<>(groupedTags.entrySet().stream()
                 .map(entry -> new TagCategoryVO(entry.getKey(), entry.getValue()))
-                .toList();
+                .toList());
     }
 
     @Override
@@ -55,7 +83,11 @@ public class TagServiceImpl implements TagService {
         if (userId <= 0) {
             return List.of();
         }
-        return tagMapper.selectTagNamesByUserId(userId);
+        return cacheService.get(
+                CacheNames.USER_TAGS,
+                CacheKeys.user(userId),
+                () -> new ArrayList<>(tagMapper.selectTagNamesByUserId(userId))
+        );
     }
 
     @Override
@@ -86,6 +118,7 @@ public class TagServiceImpl implements TagService {
                     .toList();
             userTagMapper.insertBatch(userId, orderedTagIds);
         }
+        cacheInvalidationService.userTagsChanged(userId);
     }
 
     private List<String> normalizeTags(List<String> tagNames) {

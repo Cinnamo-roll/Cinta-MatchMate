@@ -1,5 +1,7 @@
 package com.cinoo.matchmateserver.service;
 
+import com.cinoo.matchmateserver.cache.CacheInvalidationService;
+import com.cinoo.matchmateserver.cache.DistributedCacheService;
 import com.cinoo.matchmateserver.common.ErrorCode;
 import com.cinoo.matchmateserver.exception.BusinessException;
 import com.cinoo.matchmateserver.mapper.TagMapper;
@@ -13,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -28,11 +31,27 @@ class TagServiceTest {
     @Mock
     private UserTagMapper userTagMapper;
 
+    @Mock
+    private DistributedCacheService cacheService;
+
+    @Mock
+    private CacheInvalidationService cacheInvalidationService;
+
     private TagService tagService;
 
     @BeforeEach
     void setUp() {
-        tagService = new TagServiceImpl(tagMapper, userTagMapper);
+        lenient().when(cacheService.get(anyString(), anyString(), any()))
+                .thenAnswer(invocation -> {
+                    Supplier<?> loader = invocation.getArgument(2);
+                    return loader.get();
+                });
+        tagService = new TagServiceImpl(
+                tagMapper,
+                userTagMapper,
+                cacheService,
+                cacheInvalidationService
+        );
     }
 
     @Test
@@ -72,6 +91,7 @@ class TagServiceTest {
 
         verify(userTagMapper).delete(any());
         verify(userTagMapper).insertBatch(10L, List.of(1L, 2L));
+        verify(cacheInvalidationService).userTagsChanged(10L);
     }
 
     private Tag tag(long id, String name) {

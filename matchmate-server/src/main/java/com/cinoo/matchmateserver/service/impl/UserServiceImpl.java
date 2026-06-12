@@ -2,6 +2,10 @@ package com.cinoo.matchmateserver.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.cinoo.matchmateserver.cache.CacheInvalidationService;
+import com.cinoo.matchmateserver.cache.CacheKeys;
+import com.cinoo.matchmateserver.cache.CacheNames;
+import com.cinoo.matchmateserver.cache.DistributedCacheService;
 import com.cinoo.matchmateserver.common.ErrorCode;
 import com.cinoo.matchmateserver.common.PageResponse;
 import com.cinoo.matchmateserver.constant.UserConstant;
@@ -21,6 +25,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
@@ -35,16 +40,27 @@ public class UserServiceImpl implements UserService {
     private static final int MIN_ACCOUNT_LENGTH = 4;
     private static final int MIN_PASSWORD_LENGTH = 8;
     private static final long MAX_PAGE_SIZE = 100;
+    private static final int MAX_RECOMMENDATION_LIMIT = 50;
+    private static final int MAX_SEARCH_TAGS = 3;
     private static final Pattern ACCOUNT_PATTERN = Pattern.compile("^[a-zA-Z0-9]{4,16}$");
 
     private final UserMapper userMapper;
     private final PasswordService passwordService;
     private final TagService tagService;
+    private final DistributedCacheService cacheService;
+    private final CacheInvalidationService cacheInvalidationService;
 
-    public UserServiceImpl(UserMapper userMapper, PasswordService passwordService, TagService tagService) {
+    public UserServiceImpl(
+            UserMapper userMapper,
+            PasswordService passwordService,
+            TagService tagService,
+            DistributedCacheService cacheService,
+            CacheInvalidationService cacheInvalidationService) {
         this.userMapper = userMapper;
         this.passwordService = passwordService;
         this.tagService = tagService;
+        this.cacheService = cacheService;
+        this.cacheInvalidationService = cacheInvalidationService;
     }
 
     @Override
@@ -70,6 +86,7 @@ public class UserServiceImpl implements UserService {
         } catch (DataIntegrityViolationException e) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "用户已存在");
         }
+        cacheInvalidationService.userCollectionChanged();
         return user.getId();
     }
 
@@ -95,6 +112,14 @@ public class UserServiceImpl implements UserService {
         if (user == null) {
             return null;
         }
+        return cacheService.get(
+                CacheNames.USER_VIEWS,
+                CacheKeys.user(user.getId()),
+                () -> buildUserVO(user)
+        );
+    }
+
+    private UserVO buildUserVO(User user) {
         UserVO userVO = new UserVO();
         userVO.setId(user.getId());
         userVO.setUsername(user.getUsername());
@@ -154,6 +179,7 @@ public class UserServiceImpl implements UserService {
         if (userMapper.deleteById(userId) != 1) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "用户不存在");
         }
+        cacheInvalidationService.userDeleted(userId);
     }
 
     @Override
@@ -168,13 +194,33 @@ public class UserServiceImpl implements UserService {
     public List<UserVO> searchUserByTags(String keyword, List<String> tagList) {
         List<String> normalizedTags = normalizeTags(tagList);
         String normalizedKeyword = StringUtils.trimToNull(keyword);
-        return userMapper.searchByKeywordAndTags(
-                        normalizedKeyword,
+        if (normalizedKeyword != null) {
+            return loadSearchResults(normalizedKeyword, normalizedTags);
+        }
+        return cacheService.get(
+                CacheNames.USER_SEARCHES,
+                CacheKeys.search(normalizedTags),
+                () -> loadSearchResults(null, normalizedTags)
+        );
+    }
+
+    public List<UserVO> refreshSearchCache(List<String> tagList) {
+        List<String> normalizedTags = normalizeTags(tagList);
+        return cacheService.refresh(
+                CacheNames.USER_SEARCHES,
+                CacheKeys.search(normalizedTags),
+                () -> loadSearchResults(null, normalizedTags)
+        );
+    }
+
+    private List<UserVO> loadSearchResults(String keyword, List<String> normalizedTags) {
+        return new ArrayList<>(userMapper.searchByKeywordAndTags(
+                        keyword,
                         normalizedTags,
                         normalizedTags.size()
                 ).stream()
                 .map(this::toUserVO)
-                .toList();
+                .toList());
     }
 
     @Override
@@ -203,6 +249,7 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "用户资料更新失败");
         }
 
+        cacheInvalidationService.userChanged(currentUser.getId());
         User updatedUser = userMapper.selectById(currentUser.getId());
         return toUserVO(updatedUser);
     }
@@ -235,9 +282,27 @@ public class UserServiceImpl implements UserService {
     // TODO: 后期改为基于标签匹配的智能推荐算法
     @Override
     public List<UserVO> recommendUsers(int limit) {
-        return userMapper.recommendUsers(limit).stream()
+        validateRecommendationLimit(limit);
+        return cacheService.get(
+                CacheNames.USER_RECOMMENDATIONS,
+                CacheKeys.recommendation(limit),
+                () -> loadRecommendations(limit)
+        );
+    }
+
+    public List<UserVO> refreshRecommendationCache(int limit) {
+        validateRecommendationLimit(limit);
+        return cacheService.refresh(
+                CacheNames.USER_RECOMMENDATIONS,
+                CacheKeys.recommendation(limit),
+                () -> loadRecommendations(limit)
+        );
+    }
+
+    private List<UserVO> loadRecommendations(int limit) {
+        return new ArrayList<>(userMapper.recommendUsers(limit).stream()
                 .map(this::toUserVO)
-                .toList();
+                .toList());
     }
 
     @Override
@@ -246,7 +311,10 @@ public class UserServiceImpl implements UserService {
         if (!passwordService.matches(userPassword, currentUser.getUserPassword())) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "密码错误");
         }
-        userMapper.deleteById(currentUser.getId());
+        if (userMapper.deleteById(currentUser.getId()) != 1) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "账号注销失败");
+        }
+        cacheInvalidationService.userDeleted(currentUser.getId());
         HttpSession session = request.getSession(false);
         if (session != null) {
             session.invalidate();
@@ -304,6 +372,12 @@ public class UserServiceImpl implements UserService {
         }
     }
 
+    private void validateRecommendationLimit(int limit) {
+        if (limit <= 0 || limit > MAX_RECOMMENDATION_LIMIT) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "推荐数量必须为 1 到 50");
+        }
+    }
+
     private List<String> normalizeTags(List<String> tagList) {
         if (tagList == null) {
             return List.of();
@@ -313,6 +387,9 @@ public class UserServiceImpl implements UserService {
                 .map(String::trim)
                 .distinct()
                 .toList();
+        if (normalizedTags.size() > MAX_SEARCH_TAGS) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "最多选择 3 个标签");
+        }
         return normalizedTags;
     }
 

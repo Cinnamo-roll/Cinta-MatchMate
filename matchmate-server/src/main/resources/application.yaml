@@ -20,6 +20,14 @@ spring:
     data:
       redis:
         namespace: matchmate:session
+  cache:
+    type: redis
+    cache-names:
+      - tag-categories
+      - user-tags
+      - user-views
+      - user-recommendations
+      - user-searches
 
 server:
   servlet:
@@ -32,3 +40,24 @@ server:
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ${MANAGEMENT_ENDPOINTS:health}
+  health:
+    redis:
+      enabled: true
+
+matchmate:
+  cache:
+    enabled: ${CACHE_ENABLED:true}
+    lock-wait: 2s
+    warmup:
+      enabled: ${CACHE_WARMUP_ENABLED:true}
+      recommendation-limits:
+        - 8
+    schedule:
+      recommendation-refresh: ${CACHE_RECOMMENDATION_REFRESH:3m}
+      category-refresh: ${CACHE_CATEGORY_REFRESH:1h}
