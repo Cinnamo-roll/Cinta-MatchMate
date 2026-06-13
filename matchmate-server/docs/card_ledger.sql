@@ -17,7 +17,8 @@ CREATE TABLE cardRoom (
     isDelete      TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除: 0-未删除 1-已删除',
     UNIQUE KEY uk_roomCode (roomCode),
     INDEX idx_ownerId (ownerId),
-    INDEX idx_status (status)
+    INDEX idx_status (status),
+    INDEX idx_retention (status, isDelete, createTime, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='打牌记账房间';
 
 -- 房间成员表
@@ -86,3 +87,22 @@ ALTER TABLE `user`
   ADD COLUMN wins       INT NOT NULL DEFAULT 0 COMMENT '累计胜局',
   ADD COLUMN losses     INT NOT NULL DEFAULT 0 COMMENT '累计负局',
   ADD COLUMN winRate    DECIMAL(5,4) NOT NULL DEFAULT 0.0000 COMMENT '胜率';
+
+-- 房间资金记录，amount 统一按分存储
+CREATE TABLE card_fund_record (
+    id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT '资金记录ID',
+    room_id       BIGINT       NOT NULL COMMENT '房间ID',
+    type          TINYINT      NOT NULL COMMENT '类型: 1-加钱 2-扣钱',
+    amount        INT          NOT NULL COMMENT '金额(分)',
+    creator_id    BIGINT       NOT NULL COMMENT '发起用户ID',
+    create_time   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    INDEX idx_room_id (room_id, create_time DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='房间资金记录';
+
+CREATE TABLE card_fund_participant (
+    id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT 'ID',
+    fund_id       BIGINT       NOT NULL COMMENT '资金记录ID',
+    user_id       BIGINT       NOT NULL COMMENT '分摊用户ID',
+    UNIQUE KEY uk_fund_user (fund_id, user_id),
+    INDEX idx_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='房间资金分摊明细';

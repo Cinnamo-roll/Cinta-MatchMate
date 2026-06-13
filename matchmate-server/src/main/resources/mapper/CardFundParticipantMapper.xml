@@ -3,7 +3,7 @@
 <mapper namespace="com.cinoo.matchmateserver.mapper.CardFundParticipantMapper">
 
     <select id="selectByFundIds" resultType="com.cinoo.matchmateserver.model.domain.CardFundParticipant">
-        SELECT id, fund_id, user_id
+        SELECT id, fund_id AS fundId, user_id AS userId
         FROM card_fund_participant
         WHERE fund_id IN
         <foreach collection="fundIds" item="id" open="(" close=")" separator=",">

@@ -42,4 +42,107 @@
         LIMIT #{limit}
     </select>
 
+    <select id="selectExpiredEndedRoomIds" resultType="long">
+        SELECT cr.id
+        FROM cardRoom cr
+        WHERE cr.status = 1
+          AND cr.isDelete = 0
+          AND EXISTS (
+            SELECT 1
+            FROM cardRoomMember existing_member
+            WHERE existing_member.roomId = cr.id
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM cardRoomMember member
+            WHERE member.roomId = cr.id
+              AND (
+                SELECT COUNT(*)
+                FROM cardRoom newer_room
+                JOIN cardRoomMember newer_member
+                  ON newer_member.roomId = newer_room.id
+                WHERE newer_member.userId = member.userId
+                  AND newer_room.status = 1
+                  AND newer_room.isDelete = 0
+                  AND (
+                    newer_room.createTime > cr.createTime
+                    OR (
+                      newer_room.createTime = cr.createTime
+                      AND newer_room.id > cr.id
+                    )
+                  )
+              ) &lt; #{retainCount}
+          )
+    </select>
+
+    <delete id="deleteFundParticipantsByRoomIds">
+        DELETE participant
+        FROM card_fund_participant participant
+        JOIN card_fund_record fund ON fund.id = participant.fund_id
+        WHERE fund.room_id IN
+        <foreach collection="roomIds" item="roomId" open="(" close=")" separator=",">
+            #{roomId}
+        </foreach>
+    </delete>
+
+    <delete id="deleteFundsByRoomIds">
+        DELETE FROM card_fund_record
+        WHERE room_id IN
+        <foreach collection="roomIds" item="roomId" open="(" close=")" separator=",">
+            #{roomId}
+        </foreach>
+    </delete>
+
+    <delete id="deleteExpenseParticipantsByRoomIds">
+        DELETE participant
+        FROM cardExpenseParticipant participant
+        JOIN cardExpense expense ON expense.id = participant.expenseId
+        WHERE expense.roomId IN
+        <foreach collection="roomIds" item="roomId" open="(" close=")" separator=",">
+            #{roomId}
+        </foreach>
+    </delete>
+
+    <delete id="deleteExpensesByRoomIds">
+        DELETE FROM cardExpense
+        WHERE roomId IN
+        <foreach collection="roomIds" item="roomId" open="(" close=")" separator=",">
+            #{roomId}
+        </foreach>
+    </delete>
+
+    <delete id="deleteRoundScoresByRoomIds">
+        DELETE score
+        FROM cardRoundScore score
+        JOIN cardRound round_record ON round_record.id = score.roundId
+        WHERE round_record.roomId IN
+        <foreach collection="roomIds" item="roomId" open="(" close=")" separator=",">
+            #{roomId}
+        </foreach>
+    </delete>
+
+    <delete id="deleteRoundsByRoomIds">
+        DELETE FROM cardRound
+        WHERE roomId IN
+        <foreach collection="roomIds" item="roomId" open="(" close=")" separator=",">
+            #{roomId}
+        </foreach>
+    </delete>
+
+    <delete id="deleteMembersByRoomIds">
+        DELETE FROM cardRoomMember
+        WHERE roomId IN
+        <foreach collection="roomIds" item="roomId" open="(" close=")" separator=",">
+            #{roomId}
+        </foreach>
+    </delete>
+
+    <delete id="deleteRoomsByIds">
+        DELETE FROM cardRoom
+        WHERE id IN
+        <foreach collection="roomIds" item="roomId" open="(" close=")" separator=",">
+            #{roomId}
+        </foreach>
+    </delete>
+
 </mapper>

@@ -76,6 +76,15 @@ public interface UserService {
     void deleteUser(long userId);
 
     /**
+     * 管理员封停或解封普通用户。
+     *
+     * @param userId 目标用户 ID
+     * @param userStatus 0 正常，1 封停
+     * @param request HTTP 请求
+     */
+    void updateUserStatus(long userId, int userStatus, HttpServletRequest request);
+
+    /**
      * 用户登出。
      *
      * @param request HTTP请求对象

@@ -3,7 +3,12 @@
 <mapper namespace="com.cinoo.matchmateserver.mapper.CardFundRecordMapper">
 
     <select id="selectByRoomId" resultType="com.cinoo.matchmateserver.model.domain.CardFundRecord">
-        SELECT id, room_id, type, amount, creator_id, create_time
+        SELECT id,
+               room_id AS roomId,
+               type,
+               amount,
+               creator_id AS creatorId,
+               create_time AS createTime
         FROM card_fund_record
         WHERE room_id = #{roomId}
         ORDER BY create_time DESC

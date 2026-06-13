@@ -12,6 +12,7 @@ import com.cinoo.matchmateserver.model.request.UpdateUserTagsRequest;
 import com.cinoo.matchmateserver.model.request.DeleteAccountRequest;
 import com.cinoo.matchmateserver.model.request.UpdateUserProfileRequest;
 import com.cinoo.matchmateserver.model.request.UpdatePasswordRequest;
+import com.cinoo.matchmateserver.model.request.UpdateUserStatusRequest;
 import com.cinoo.matchmateserver.model.vo.UserVO;
 import com.cinoo.matchmateserver.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -117,6 +118,16 @@ public class UserController {
             throw new BusinessException(ErrorCode.NO_AUTH);
         }
         userService.deleteUser(id);
+        return ResultUtils.success(null);
+    }
+
+    @Operation(summary = "更新用户状态", description = "管理员封停或解封普通用户")
+    @PutMapping("/{id}/status")
+    public BaseResponse<Void> updateUserStatus(
+            @PathVariable long id,
+            @Valid @RequestBody UpdateUserStatusRequest updateRequest,
+            HttpServletRequest request) {
+        userService.updateUserStatus(id, updateRequest.getUserStatus(), request);
         return ResultUtils.success(null);
     }
 

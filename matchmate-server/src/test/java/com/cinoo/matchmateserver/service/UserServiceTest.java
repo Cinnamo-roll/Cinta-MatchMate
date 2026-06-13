@@ -12,6 +12,7 @@ import com.cinoo.matchmateserver.model.request.UpdateUserProfileRequest;
 import com.cinoo.matchmateserver.model.vo.UserVO;
 import com.cinoo.matchmateserver.service.impl.UserServiceImpl;
 import com.cinoo.matchmateserver.utils.OssUtils;
+import com.cinoo.matchmateserver.websocket.ChatWebSocketHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -52,6 +53,9 @@ class UserServiceTest {
     @Mock
     private OnlineUserService onlineUserService;
 
+    @Mock
+    private ChatWebSocketHandler chatWebSocketHandler;
+
     private PasswordService passwordService;
     private UserService userService;
 
@@ -70,7 +74,8 @@ class UserServiceTest {
                 cacheService,
                 cacheInvalidationService,
                 ossUtils,
-                onlineUserService
+                onlineUserService,
+                chatWebSocketHandler
         );
     }
 
@@ -144,6 +149,7 @@ class UserServiceTest {
         );
 
         assertEquals(ErrorCode.NO_AUTH.getCode(), exception.getCode());
+        assertEquals("账号已被封禁，请联系管理员", exception.getDescription());
     }
 
     @Test
@@ -294,6 +300,85 @@ class UserServiceTest {
         );
 
         assertEquals("当前密码错误", exception.getDescription());
+        verify(userMapper, never()).updateById(any(User.class));
+    }
+
+    @Test
+    void adminCanBanNormalUser() {
+        User admin = activeUser();
+        admin.setUserRole(UserConstant.ADMIN_ROLE);
+        User target = activeUser();
+        target.setId(2L);
+        when(userMapper.selectById(1L)).thenReturn(admin);
+        when(userMapper.selectById(2L)).thenReturn(target);
+        when(userMapper.updateById(any(User.class))).thenReturn(1);
+
+        userService.updateUserStatus(
+                target.getId(),
+                UserConstant.BANNED_STATUS,
+                loggedInRequest(admin.getId())
+        );
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userMapper).updateById(captor.capture());
+        assertEquals(target.getId(), captor.getValue().getId());
+        assertEquals(UserConstant.BANNED_STATUS, captor.getValue().getUserStatus());
+        verify(cacheInvalidationService).userChanged(target.getId());
+        verify(chatWebSocketHandler).pushAccountBannedAndDisconnect(
+                eq(target.getId()),
+                contains("封禁")
+        );
+        verify(onlineUserService).userOffline(target.getId());
+    }
+
+    @Test
+    void normalUserCannotUpdateUserStatus() {
+        User user = activeUser();
+        when(userMapper.selectById(user.getId())).thenReturn(user);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> userService.updateUserStatus(
+                        2L,
+                        UserConstant.BANNED_STATUS,
+                        loggedInRequest(user.getId())
+                )
+        );
+
+        assertEquals(ErrorCode.NO_AUTH.getCode(), exception.getCode());
+        verify(userMapper, never()).updateById(any(User.class));
+    }
+
+    @Test
+    void adminCannotUpdateOwnStatusOrAnotherAdmin() {
+        User admin = activeUser();
+        admin.setUserRole(UserConstant.ADMIN_ROLE);
+        when(userMapper.selectById(admin.getId())).thenReturn(admin);
+
+        assertThrows(
+                BusinessException.class,
+                () -> userService.updateUserStatus(
+                        admin.getId(),
+                        UserConstant.BANNED_STATUS,
+                        loggedInRequest(admin.getId())
+                )
+        );
+
+        User anotherAdmin = activeUser();
+        anotherAdmin.setId(2L);
+        anotherAdmin.setUserRole(UserConstant.ADMIN_ROLE);
+        when(userMapper.selectById(2L)).thenReturn(anotherAdmin);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> userService.updateUserStatus(
+                        anotherAdmin.getId(),
+                        UserConstant.BANNED_STATUS,
+                        loggedInRequest(admin.getId())
+                )
+        );
+
+        assertEquals(ErrorCode.NO_AUTH.getCode(), exception.getCode());
         verify(userMapper, never()).updateById(any(User.class));
     }
 

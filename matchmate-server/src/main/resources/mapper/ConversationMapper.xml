@@ -23,6 +23,7 @@
         SELECT <include refid="Base_Column_List"/>
         FROM conversation
         WHERE isDelete = 0
+          AND lastMessageTime IS NOT NULL
           AND (userId1 = #{userId} OR userId2 = #{userId})
         ORDER BY lastMessageTime DESC, id DESC
     </select>

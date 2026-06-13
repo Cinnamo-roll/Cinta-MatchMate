@@ -76,7 +76,9 @@ public class ChatServiceImpl implements ChatService {
         }
 
         User receiver = userMapper.selectById(receiverId);
-        if (receiver == null || receiver.getIsDelete() != 0) {
+        if (receiver == null
+                || Objects.equals(receiver.getIsDelete(), 1)
+                || !Objects.equals(receiver.getUserStatus(), 0)) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "接收方用户不存在");
         }
 
@@ -121,7 +123,7 @@ public class ChatServiceImpl implements ChatService {
     public List<MessageVO> getMessages(Long conversationId, long page, long pageSize,
                                        HttpServletRequest request) {
         User currentUser = userService.getLoginUser(request);
-        getParticipantConversation(conversationId, currentUser.getId());
+        Conversation conversation = getParticipantConversation(conversationId, currentUser.getId());
 
         long normalizedPage = Math.max(page, 1);
         long normalizedPageSize = Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE);
@@ -133,7 +135,7 @@ public class ChatServiceImpl implements ChatService {
         );
         Collections.reverse(messages);
 
-        markConversationRead(currentUser.getId(), conversationId);
+        markConversationRead(currentUser.getId(), conversation);
         return messages.stream().map(this::toMessageVO).toList();
     }
 
@@ -181,8 +183,8 @@ public class ChatServiceImpl implements ChatService {
     @Override
     public void openConversation(Long conversationId, HttpServletRequest request) {
         User currentUser = userService.getLoginUser(request);
-        getParticipantConversation(conversationId, currentUser.getId());
-        markConversationRead(currentUser.getId(), conversationId);
+        Conversation conversation = getParticipantConversation(conversationId, currentUser.getId());
+        markConversationRead(currentUser.getId(), conversation);
     }
 
     @Override
@@ -229,11 +231,19 @@ public class ChatServiceImpl implements ChatService {
         chatRedisService.incrementUnread(userId, conversationId);
     }
 
-    private void markConversationRead(Long userId, Long conversationId) {
-        messageMapper.markAsRead(conversationId, userId);
+    private void markConversationRead(Long userId, Conversation conversation) {
+        Long conversationId = conversation.getId();
+        int updatedRows = messageMapper.markAsRead(conversationId, userId);
         chatRedisService.clearUnread(userId, conversationId);
         chatRedisService.setCurrentConversation(userId, conversationId);
         chatRedisService.evictConversations(userId);
+        if (updatedRows > 0) {
+            chatWebSocketHandler.pushMessagesRead(
+                    targetUserId(conversation, userId),
+                    conversationId,
+                    userId
+            );
+        }
     }
 
     private Conversation getParticipantConversation(Long conversationId, Long userId) {

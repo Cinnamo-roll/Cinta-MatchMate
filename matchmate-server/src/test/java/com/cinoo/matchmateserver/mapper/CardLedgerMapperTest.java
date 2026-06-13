@@ -57,6 +57,12 @@ class CardLedgerMapperTest {
     private CardExpenseParticipantMapper cardExpenseParticipantMapper;
 
     @Autowired
+    private CardFundRecordMapper cardFundRecordMapper;
+
+    @Autowired
+    private CardFundParticipantMapper cardFundParticipantMapper;
+
+    @Autowired
     private UserMapper userMapper;
 
     private User testUser1;
@@ -159,6 +165,22 @@ class CardLedgerMapperTest {
         assertTrue(ranking.stream().noneMatch(user -> user.getId().equals(testUser3.getId())));
     }
 
+    @Test
+    void selectExpiredEndedRoomIds_shouldKeepLatestSixForEveryMember() {
+        List<CardRoom> rooms = new ArrayList<>();
+        for (int i = 0; i < 7; i++) {
+            CardRoom room = createRoom(String.valueOf(610000 + i), testUser1.getId());
+            joinRoom(room.getId(), testUser1.getId());
+            room.setStatus(CardConstant.ROOM_STATUS_ENDED);
+            cardRoomMapper.updateById(room);
+            rooms.add(room);
+        }
+
+        List<Long> expiredIds = cardRoomMapper.selectExpiredEndedRoomIds(6);
+
+        assertEquals(List.of(rooms.get(0).getId()), expiredIds);
+    }
+
     // ── 牌局 + 分数 ──
 
     @Test
@@ -193,6 +215,32 @@ class CardLedgerMapperTest {
         List<CardRoundScore> loaded = cardRoundScoreMapper.selectByRoundId(round.getId());
         assertEquals(2, loaded.size());
         assertEquals(0, loaded.stream().mapToInt(CardRoundScore::getScore).sum());
+    }
+
+    @Test
+    void createFund_shouldUseSnakeCaseTableMappings() {
+        CardRoom room = createRoom("620000", testUser1.getId());
+        CardFundRecord fund = new CardFundRecord();
+        fund.setRoomId(room.getId());
+        fund.setType(CardConstant.FUND_TYPE_ADD);
+        fund.setAmount(100);
+        fund.setCreatorId(testUser1.getId());
+        cardFundRecordMapper.insert(fund);
+
+        CardFundParticipant participant = new CardFundParticipant();
+        participant.setFundId(fund.getId());
+        participant.setUserId(testUser2.getId());
+        cardFundParticipantMapper.insertBatch(List.of(participant));
+
+        List<CardFundRecord> funds = cardFundRecordMapper.selectByRoomId(room.getId(), 10);
+        List<CardFundParticipant> participants =
+                cardFundParticipantMapper.selectByFundIds(List.of(fund.getId()));
+
+        assertEquals(1, funds.size());
+        assertEquals(room.getId(), funds.get(0).getRoomId());
+        assertEquals(testUser1.getId(), funds.get(0).getCreatorId());
+        assertEquals(1, participants.size());
+        assertEquals(testUser2.getId(), participants.get(0).getUserId());
     }
 
     @Test

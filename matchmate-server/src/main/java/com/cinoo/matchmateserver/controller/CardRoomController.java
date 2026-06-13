@@ -61,7 +61,7 @@ public class CardRoomController {
     @Operation(summary = "查询房间记录", description = "查询当前用户最近参与的房间")
     @GetMapping("/history")
     public BaseResponse<List<CardRoomHistoryVO>> getHistory(
-            @RequestParam(defaultValue = "10") int limit,
+            @RequestParam(defaultValue = "6") int limit,
             HttpServletRequest request) {
         return ResultUtils.success(cardRoomService.getHistory(limit, request));
     }

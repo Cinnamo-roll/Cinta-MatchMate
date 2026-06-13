@@ -59,13 +59,42 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     public void pushNewMessage(Long receiverId, MessageVO messageVO) {
+        push(receiverId, "new_message", messageVO);
+    }
+
+    public void pushMessagesRead(Long receiverId, Long conversationId, Long readerId) {
+        push(receiverId, "messages_read", new MessagesReadPayload(conversationId, readerId));
+    }
+
+    public void pushAccountBannedAndDisconnect(Long userId, String message) {
+        WebSocketSession session = sessionManager.getSession(userId);
+        if (session == null) {
+            return;
+        }
+        try {
+            String payload = objectMapper.writeValueAsString(
+                    new PushPayload("account_banned", new AccountBannedPayload(message))
+            );
+            session.sendMessage(new TextMessage(payload));
+        } catch (IOException e) {
+            log.warn("Failed to push banned notice to user {}", userId, e);
+        } finally {
+            try {
+                session.close(CloseStatus.POLICY_VIOLATION);
+            } catch (IOException e) {
+                log.warn("Failed to disconnect banned user {}", userId, e);
+            }
+        }
+    }
+
+    private void push(Long receiverId, String type, Object data) {
         WebSocketSession session = sessionManager.getSession(receiverId);
         if (session == null) {
             return;
         }
         try {
             String payload = objectMapper.writeValueAsString(
-                    new PushPayload("new_message", messageVO)
+                    new PushPayload(type, data)
             );
             session.sendMessage(new TextMessage(payload));
         } catch (IOException e) {
@@ -79,5 +108,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     private record PushPayload(String type, Object data) {
+    }
+
+    private record MessagesReadPayload(Long conversationId, Long readerId) {
+    }
+
+    private record AccountBannedPayload(String message) {
     }
 }

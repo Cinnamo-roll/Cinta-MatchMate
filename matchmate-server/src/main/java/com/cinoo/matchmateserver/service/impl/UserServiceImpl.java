@@ -19,6 +19,7 @@ import com.cinoo.matchmateserver.service.TagService;
 import com.cinoo.matchmateserver.service.UserService;
 import com.cinoo.matchmateserver.service.OnlineUserService;
 import com.cinoo.matchmateserver.utils.OssUtils;
+import com.cinoo.matchmateserver.websocket.ChatWebSocketHandler;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +28,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Objects;
@@ -39,7 +42,6 @@ import java.util.regex.Pattern;
 @Slf4j
 public class UserServiceImpl implements UserService {
 
-    private static final int NORMAL_USER_STATUS = 0;
     private static final int MIN_ACCOUNT_LENGTH = 4;
     private static final int MIN_PASSWORD_LENGTH = 8;
     private static final long MAX_PAGE_SIZE = 100;
@@ -54,6 +56,7 @@ public class UserServiceImpl implements UserService {
     private final CacheInvalidationService cacheInvalidationService;
     private final OssUtils ossUtils;
     private final OnlineUserService onlineUserService;
+    private final ChatWebSocketHandler chatWebSocketHandler;
 
     public UserServiceImpl(
             UserMapper userMapper,
@@ -62,7 +65,8 @@ public class UserServiceImpl implements UserService {
             DistributedCacheService cacheService,
             CacheInvalidationService cacheInvalidationService,
             OssUtils ossUtils,
-            OnlineUserService onlineUserService) {
+            OnlineUserService onlineUserService,
+            ChatWebSocketHandler chatWebSocketHandler) {
         this.userMapper = userMapper;
         this.passwordService = passwordService;
         this.tagService = tagService;
@@ -70,6 +74,7 @@ public class UserServiceImpl implements UserService {
         this.cacheInvalidationService = cacheInvalidationService;
         this.ossUtils = ossUtils;
         this.onlineUserService = onlineUserService;
+        this.chatWebSocketHandler = chatWebSocketHandler;
     }
 
     @Override
@@ -109,7 +114,7 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "用户不存在或密码错误");
         }
         if (!isActive(user)) {
-            throw new BusinessException(ErrorCode.NO_AUTH, "用户状态异常");
+            throw new BusinessException(ErrorCode.NO_AUTH, "账号已被封禁，请联系管理员");
         }
 
         saveLoginState(request, user.getId());
@@ -126,6 +131,7 @@ public class UserServiceImpl implements UserService {
                 CacheKeys.user(user.getId()),
                 () -> buildUserVO(user)
         );
+        userVO.setWinRate(calculateWinRate(userVO.getWins(), userVO.getLosses()));
         userVO.setIsOnline(onlineUserService.isOnline(user.getId()));
         return userVO;
     }
@@ -147,8 +153,19 @@ public class UserServiceImpl implements UserService {
         userVO.setTotalScore(user.getTotalScore());
         userVO.setWins(user.getWins());
         userVO.setLosses(user.getLosses());
-        userVO.setWinRate(user.getWinRate());
+        userVO.setWinRate(calculateWinRate(user.getWins(), user.getLosses()));
         return userVO;
+    }
+
+    private BigDecimal calculateWinRate(Integer wins, Integer losses) {
+        int winCount = Objects.requireNonNullElse(wins, 0);
+        int lossCount = Objects.requireNonNullElse(losses, 0);
+        int total = winCount + lossCount;
+        if (total == 0) {
+            return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
+        }
+        return BigDecimal.valueOf(winCount)
+                .divide(BigDecimal.valueOf(total), 4, RoundingMode.HALF_UP);
     }
 
     @Override
@@ -162,7 +179,10 @@ public class UserServiceImpl implements UserService {
         User user = userMapper.selectById(userId);
         if (user == null || !isActive(user)) {
             session.removeAttribute(UserConstant.USER_LOGIN_STATE);
-            throw new BusinessException(ErrorCode.NOT_LOGIN, "登录状态已失效");
+            String description = user == null
+                    ? "登录状态已失效"
+                    : "账号已被封禁，请联系管理员";
+            throw new BusinessException(ErrorCode.NOT_LOGIN, description);
         }
         return user;
     }
@@ -177,7 +197,12 @@ public class UserServiceImpl implements UserService {
         validatePageParameters(pageNum, pageSize);
 
         LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.like(StringUtils.isNotBlank(username), User::getUsername, username)
+        queryWrapper.and(
+                        StringUtils.isNotBlank(username),
+                        query -> query.like(User::getUsername, username)
+                                .or()
+                                .like(User::getUserAccount, username)
+                )
                 .orderByDesc(User::getCreateTime);
 
         Page<User> userPage = userMapper.selectPage(new Page<>(pageNum, pageSize), queryWrapper);
@@ -196,6 +221,52 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ErrorCode.NOT_FOUND, "用户不存在");
         }
         cacheInvalidationService.userDeleted(userId);
+    }
+
+    @Override
+    public void updateUserStatus(long userId, int userStatus, HttpServletRequest request) {
+        User admin = getLoginUser(request);
+        if (!Objects.equals(admin.getUserRole(), UserConstant.ADMIN_ROLE)) {
+            throw new BusinessException(ErrorCode.NO_AUTH);
+        }
+        if (userId <= 0
+                || (userStatus != UserConstant.NORMAL_STATUS
+                && userStatus != UserConstant.BANNED_STATUS)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "用户状态参数不合法");
+        }
+        if (Objects.equals(admin.getId(), userId)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "不能修改自己的账号状态");
+        }
+
+        User targetUser = userMapper.selectById(userId);
+        if (targetUser == null || Objects.equals(targetUser.getIsDelete(), 1)) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "用户不存在");
+        }
+        if (Objects.equals(targetUser.getUserRole(), UserConstant.ADMIN_ROLE)) {
+            throw new BusinessException(ErrorCode.NO_AUTH, "不能修改管理员账号状态");
+        }
+        if (Objects.equals(targetUser.getUserStatus(), userStatus)) {
+            return;
+        }
+
+        User updateUser = new User();
+        updateUser.setId(userId);
+        updateUser.setUserStatus(userStatus);
+        if (userMapper.updateById(updateUser) != 1) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "用户状态更新失败");
+        }
+        cacheInvalidationService.userChanged(userId);
+        if (userStatus == UserConstant.BANNED_STATUS) {
+            chatWebSocketHandler.pushAccountBannedAndDisconnect(
+                    userId,
+                    "你已被管理员封禁，已强制退出登录"
+            );
+            try {
+                onlineUserService.userOffline(userId);
+            } catch (RuntimeException e) {
+                log.warn("Failed to clear online state for banned userId={}", userId, e);
+            }
+        }
     }
 
     @Override
@@ -389,7 +460,7 @@ public class UserServiceImpl implements UserService {
     }
 
     private boolean isActive(User user) {
-        return Objects.equals(user.getUserStatus(), NORMAL_USER_STATUS);
+        return Objects.equals(user.getUserStatus(), UserConstant.NORMAL_STATUS);
     }
 
     /**

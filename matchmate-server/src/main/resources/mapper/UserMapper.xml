@@ -78,6 +78,17 @@
         SELECT u.*
         FROM user u
         WHERE u.isDelete = 0
+          AND (
+            u.id = #{userId}
+            OR EXISTS (
+              SELECT 1
+              FROM cardRoomMember current_member
+              JOIN cardRoomMember shared_member
+                ON shared_member.roomId = current_member.roomId
+              WHERE current_member.userId = #{userId}
+                AND shared_member.userId = u.id
+            )
+          )
         ORDER BY u.totalScore DESC, u.wins DESC, u.id ASC
         LIMIT #{limit}
     </select>
@@ -85,12 +96,12 @@
     <update id="addStats">
         UPDATE user
         SET totalScore = totalScore + #{totalScore},
-            wins = wins + #{wins},
-            losses = losses + #{losses},
             winRate = CASE
                 WHEN (wins + #{wins} + losses + #{losses}) = 0 THEN 0.0000
                 ELSE ROUND((wins + #{wins}) / (wins + #{wins} + losses + #{losses}), 4)
-            END
+            END,
+            wins = wins + #{wins},
+            losses = losses + #{losses}
         WHERE id = #{userId}
           AND isDelete = 0
     </update>

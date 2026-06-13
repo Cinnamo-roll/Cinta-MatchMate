@@ -68,6 +68,9 @@ matchmate:
     schedule:
       recommendation-refresh: ${CACHE_RECOMMENDATION_REFRESH:3m}
       category-refresh: ${CACHE_CATEGORY_REFRESH:1h}
+  retention:
+    chat-message-age: ${CHAT_MESSAGE_AGE:1d}
+    cleanup-cron: ${DATA_RETENTION_CLEANUP_CRON:0 5 * * * *}
 
 aliyun:
   oss:

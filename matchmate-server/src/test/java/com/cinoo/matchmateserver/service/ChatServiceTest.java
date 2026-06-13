@@ -3,6 +3,8 @@ package com.cinoo.matchmateserver.service;
 import com.cinoo.matchmateserver.mapper.ConversationMapper;
 import com.cinoo.matchmateserver.mapper.MessageMapper;
 import com.cinoo.matchmateserver.mapper.UserMapper;
+import com.cinoo.matchmateserver.common.ErrorCode;
+import com.cinoo.matchmateserver.exception.BusinessException;
 import com.cinoo.matchmateserver.model.domain.Conversation;
 import com.cinoo.matchmateserver.model.domain.Message;
 import com.cinoo.matchmateserver.model.domain.User;
@@ -23,6 +25,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
@@ -147,11 +150,42 @@ class ChatServiceTest {
         verify(chatRedisService).setUnreadCount(1L, 10L, 4L);
     }
 
+    @Test
+    void openingConversationPushesReadReceiptWhenMessagesChanged() {
+        Conversation conversation = conversation(10L, 1L, 2L);
+        when(conversationMapper.selectById(10L)).thenReturn(conversation);
+        when(messageMapper.markAsRead(10L, 1L)).thenReturn(2);
+
+        chatService.openConversation(10L, new MockHttpServletRequest());
+
+        verify(chatWebSocketHandler).pushMessagesRead(2L, 10L, 1L);
+    }
+
+    @Test
+    void sendMessageRejectsBannedReceiver() {
+        User receiver = user(2L, "alice");
+        receiver.setUserStatus(1);
+        when(userMapper.selectById(2L)).thenReturn(receiver);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> chatService.sendMessage(
+                        2L,
+                        "hello",
+                        new MockHttpServletRequest()
+                )
+        );
+
+        assertEquals(ErrorCode.PARAM_ERROR.getCode(), exception.getCode());
+        verify(messageMapper, never()).insert(any(Message.class));
+    }
+
     private User user(Long id, String username) {
         User user = new User();
         user.setId(id);
         user.setUsername(username);
         user.setIsDelete(0);
+        user.setUserStatus(0);
         return user;
     }
 

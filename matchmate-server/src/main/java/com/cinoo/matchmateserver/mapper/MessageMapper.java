@@ -5,6 +5,7 @@ import com.cinoo.matchmateserver.model.domain.Message;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.Date;
 import java.util.List;
 
 @Mapper
@@ -28,4 +29,10 @@ public interface MessageMapper extends BaseMapper<Message> {
      */
     int markAsRead(@Param("conversationId") Long conversationId,
                    @Param("receiverId") Long receiverId);
+
+    List<Long> selectConversationIdsBefore(@Param("cutoff") Date cutoff);
+
+    int deleteBefore(@Param("cutoff") Date cutoff);
+
+    Message selectLatestByConversationId(@Param("conversationId") Long conversationId);
 }

@@ -41,6 +41,8 @@ public final class CardConstant {
     public static final int ROOM_CODE_LENGTH = 6;
     /** 房间号字符集 */
     public static final String ROOM_CODE_CHARS = "0123456789";
+    /** 每位用户最多保留的历史房间数量 */
+    public static final int HISTORY_RETENTION_COUNT = 6;
 
     // ── 平摊资金类型 ──
     /** 加钱 */

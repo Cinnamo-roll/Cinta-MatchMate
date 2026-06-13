@@ -2,6 +2,7 @@ package com.cinoo.matchmateserver.websocket;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.WebSocketSession;
 
 import java.util.Map;
@@ -49,5 +50,17 @@ public class WebSocketSessionManager {
     public boolean isOnline(Long userId) {
         WebSocketSession session = sessions.get(userId);
         return session != null && session.isOpen();
+    }
+
+    public void disconnect(Long userId) {
+        WebSocketSession session = getSession(userId);
+        if (session == null) {
+            return;
+        }
+        try {
+            session.close(CloseStatus.POLICY_VIOLATION);
+        } catch (Exception e) {
+            log.warn("Failed to close WebSocket session for user {}", userId, e);
+        }
     }
 }

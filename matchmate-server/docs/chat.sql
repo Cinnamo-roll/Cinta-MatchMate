@@ -26,5 +26,6 @@ CREATE TABLE message (
     updateTime      DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     isDelete        TINYINT      DEFAULT 0 COMMENT '逻辑删除：0-未删除 1-已删除',
     INDEX idx_conversationId (conversationId, createTime DESC),
-    INDEX idx_receiverUnread (conversationId, receiverId, status)
+    INDEX idx_receiverUnread (conversationId, receiverId, status),
+    INDEX idx_message_create_time (createTime)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='消息表';

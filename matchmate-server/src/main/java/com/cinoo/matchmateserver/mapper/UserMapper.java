@@ -22,7 +22,9 @@ public interface UserMapper extends BaseMapper<User> {
     /**
      * 查询全体用户积分排名。
      */
-    List<User> selectCardRanking(@Param("limit") int limit);
+    List<User> selectCardRanking(
+            @Param("userId") Long userId,
+            @Param("limit") int limit);
 
     /**
      * 原子累加用户统计。

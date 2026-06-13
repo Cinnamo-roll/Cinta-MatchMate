@@ -7,7 +7,8 @@ import com.cinoo.matchmateserver.exception.BusinessException;
 import com.cinoo.matchmateserver.mapper.*;
 import com.cinoo.matchmateserver.model.domain.*;
 import com.cinoo.matchmateserver.model.request.AddExpenseRequest;
-import com.cinoo.matchmateserver.model.request.AddRoundRequest;
+import com.cinoo.matchmateserver.model.request.AddFundRequest;
+import com.cinoo.matchmateserver.model.request.AddTransferRequest;
 import com.cinoo.matchmateserver.model.vo.CardRoomVO;
 import com.cinoo.matchmateserver.model.vo.UserVO;
 import com.cinoo.matchmateserver.service.impl.CardRoomServiceImpl;
@@ -23,6 +24,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -42,8 +44,11 @@ class CardRoomServiceTest {
     @Mock private CardRoundScoreMapper cardRoundScoreMapper;
     @Mock private CardExpenseMapper cardExpenseMapper;
     @Mock private CardExpenseParticipantMapper cardExpenseParticipantMapper;
+    @Mock private CardFundRecordMapper cardFundRecordMapper;
+    @Mock private CardFundParticipantMapper cardFundParticipantMapper;
     @Mock private UserMapper userMapper;
     @Mock private UserService userService;
+    @Mock private DataRetentionService dataRetentionService;
     @Mock private CacheInvalidationService cacheInvalidationService;
     @Mock private CardWebSocketHandler cardWebSocketHandler;
     @Mock private org.redisson.api.RedissonClient redissonClient;
@@ -58,7 +63,8 @@ class CardRoomServiceTest {
         cardRoomService = new CardRoomServiceImpl(
                 cardRoomMapper, cardRoomMemberMapper, cardRoundMapper,
                 cardRoundScoreMapper, cardExpenseMapper, cardExpenseParticipantMapper,
-                userMapper, userService, cacheInvalidationService,
+                cardFundRecordMapper, cardFundParticipantMapper,
+                userMapper, userService, dataRetentionService, cacheInvalidationService,
                 redissonClient, cardWebSocketHandler
         );
 
@@ -246,72 +252,106 @@ class CardRoomServiceTest {
         assertEquals(ErrorCode.PARAM_ERROR.getCode(), ex.getCode());
     }
 
-    // ── 新增牌局 ──
-
     @Test
-    void addRound_notOwner_shouldThrow() {
+    void addTransfer_oneYuan_shouldChangeOnePoint() {
         CardRoom room = mockActiveRoom();
-        AddRoundRequest req = new AddRoundRequest();
+        CardRoomMember owner = makeMember(room.getId(), OWNER_ID, 0);
+        owner.setId(11L);
+        CardRoomMember other = makeMember(room.getId(), OTHER_ID, 0);
+        other.setId(12L);
+        AddTransferRequest request = makeTransferRequest(OTHER_ID, "1");
+        AtomicReference<CardRound> savedRound = new AtomicReference<>();
+        AtomicReference<List<CardRoundScore>> savedScores = new AtomicReference<>(List.of());
 
-        assertThrows(BusinessException.class,
-                () -> cardRoomService.addRound(room.getId(), req, otherRequest));
-    }
-
-    @Test
-    void addRound_sumNotZero_shouldThrow() {
-        CardRoom room = mockActiveRoom();
-        AddRoundRequest req = makeRoundRequest(
-                new long[]{OWNER_ID, OTHER_ID},
-                new int[]{5, -3}  // sum = 2 != 0
-        );
-
-        BusinessException ex = assertThrows(BusinessException.class,
-                () -> cardRoomService.addRound(room.getId(), req, ownerRequest));
-        assertEquals(ErrorCode.ROUND_SUM_NOT_ZERO.getCode(), ex.getCode());
-    }
-
-    @Test
-    void addRound_roomEnded_shouldThrow() {
-        CardRoom room = mockEndedRoom();
-        AddRoundRequest req = makeRoundRequest(
-                new long[]{OWNER_ID, OTHER_ID},
-                new int[]{5, -5}
-        );
-
-        assertThrows(BusinessException.class,
-                () -> cardRoomService.addRound(room.getId(), req, ownerRequest));
-    }
-
-    @Test
-    void addRound_missingActiveMember_shouldThrow() {
-        CardRoom room = mockActiveRoom();
-        AddRoundRequest req = makeRoundRequest(
-                new long[]{OWNER_ID, OTHER_ID},
-                new int[]{5, -5}
-        );
-        when(cardRoomMapper.selectActiveMemberIds(room.getId()))
-                .thenReturn(List.of(OWNER_ID, OTHER_ID, OTHER2_ID));
-
-        BusinessException ex = assertThrows(BusinessException.class,
-                () -> cardRoomService.addRound(room.getId(), req, ownerRequest));
-
-        assertEquals(ErrorCode.ROUND_MEMBER_MISSING.getCode(), ex.getCode());
-    }
-
-    @Test
-    void addRound_duplicateMember_shouldThrow() {
-        CardRoom room = mockActiveRoom();
-        AddRoundRequest req = makeRoundRequest(
-                new long[]{OWNER_ID, OWNER_ID},
-                new int[]{5, -5}
-        );
+        when(cardRoomMemberMapper.selectOne(any())).thenReturn(owner, owner, other);
         when(cardRoomMapper.selectActiveMemberIds(room.getId()))
                 .thenReturn(List.of(OWNER_ID, OTHER_ID));
+        when(cardRoundMapper.selectMaxRoundNo(room.getId())).thenReturn(0);
+        when(cardRoundMapper.insert(any(CardRound.class))).thenAnswer(invocation -> {
+            CardRound round = invocation.getArgument(0);
+            round.setId(30L);
+            savedRound.set(round);
+            return 1;
+        });
+        when(cardRoundScoreMapper.insertBatch(anyList())).thenAnswer(invocation -> {
+            savedScores.set(invocation.getArgument(0));
+            return 2;
+        });
+        when(cardRoundMapper.selectByRoomId(eq(room.getId()), anyInt()))
+                .thenAnswer(invocation -> List.of(savedRound.get()));
+        when(cardRoundScoreMapper.selectByRoundIds(anyList()))
+                .thenAnswer(invocation -> savedScores.get());
+        configureRoomView(room, List.of(owner, other));
 
-        BusinessException ex = assertThrows(BusinessException.class,
-                () -> cardRoomService.addRound(room.getId(), req, ownerRequest));
+        CardRoomVO result = cardRoomService.addTransfer(room.getId(), request, ownerRequest);
 
-        assertEquals(ErrorCode.ROUND_MEMBER_MISSING.getCode(), ex.getCode());
+        verify(cardRoomMemberMapper).updateScoreIncrement(11L, -1);
+        verify(cardRoomMemberMapper).updateScoreIncrement(12L, 1);
+        assertEquals(-1, result.getRecentRounds().get(0).getScores().stream()
+                .filter(score -> score.getUserId().equals(OWNER_ID))
+                .findFirst()
+                .orElseThrow()
+                .getScore());
+    }
+
+    @Test
+    void addTransfer_decimalAmount_shouldBeRejected() {
+        CardRoom room = mockActiveRoom();
+        CardRoomMember owner = makeMember(room.getId(), OWNER_ID, 0);
+        when(cardRoomMemberMapper.selectOne(any())).thenReturn(owner);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> cardRoomService.addTransfer(
+                        room.getId(),
+                        makeTransferRequest(OTHER_ID, "1.5"),
+                        ownerRequest));
+
+        assertEquals(ErrorCode.PARAM_ERROR.getCode(), exception.getCode());
+        verify(cardRoundMapper, never()).insert(any(CardRound.class));
+    }
+
+    @Test
+    void addFund_oneYuan_shouldStoreOneHundredCentsAndKeepCreatorBalance() {
+        CardRoom room = mockActiveRoom();
+        CardRoomMember owner = makeMember(room.getId(), OWNER_ID, 0);
+        CardRoomMember other = makeMember(room.getId(), OTHER_ID, 0);
+        AtomicReference<CardFundRecord> savedFund = new AtomicReference<>();
+        AtomicReference<List<CardFundParticipant>> savedParticipants =
+                new AtomicReference<>(List.of());
+        AddFundRequest request = new AddFundRequest();
+        request.setType(CardConstant.FUND_TYPE_ADD);
+        request.setAmount(BigDecimal.ONE);
+        request.setParticipantIds(List.of(OTHER_ID));
+
+        when(cardRoomMemberMapper.selectOne(any())).thenReturn(owner);
+        when(cardRoomMapper.selectActiveMemberIds(room.getId()))
+                .thenReturn(List.of(OWNER_ID, OTHER_ID));
+        when(cardFundRecordMapper.insert(any(CardFundRecord.class))).thenAnswer(invocation -> {
+            CardFundRecord fund = invocation.getArgument(0);
+            fund.setId(40L);
+            savedFund.set(fund);
+            return 1;
+        });
+        when(cardFundParticipantMapper.insertBatch(anyList())).thenAnswer(invocation -> {
+            savedParticipants.set(invocation.getArgument(0));
+            return 1;
+        });
+        when(cardFundRecordMapper.selectByRoomId(eq(room.getId()), anyInt()))
+                .thenAnswer(invocation -> List.of(savedFund.get()));
+        when(cardFundParticipantMapper.selectByFundIds(anyList()))
+                .thenAnswer(invocation -> savedParticipants.get());
+        configureRoomView(room, List.of(owner, other));
+
+        CardRoomVO result = cardRoomService.addFund(room.getId(), request, ownerRequest);
+
+        assertEquals(100, savedFund.get().getAmount());
+        assertEquals(100, result.getFundBalance());
+        verify(cardWebSocketHandler).pushEvent(
+                eq(room.getId()),
+                eq(OWNER_ID),
+                eq(CardWebSocketHandler.EVENT_FUND_CREATED),
+                any());
     }
 
     // ── 新增费用 ──
@@ -470,25 +510,36 @@ class CardRoomServiceTest {
         return room;
     }
 
-    private AddRoundRequest makeRoundRequest(long[] userIds, int[] scores) {
-        AddRoundRequest req = new AddRoundRequest();
-        List<AddRoundRequest.ScoreEntry> entries = new ArrayList<>();
-        for (int i = 0; i < userIds.length; i++) {
-            AddRoundRequest.ScoreEntry e = new AddRoundRequest.ScoreEntry();
-            e.setUserId(userIds[i]);
-            e.setScore(scores[i]);
-            entries.add(e);
-        }
-        req.setScores(entries);
-        return req;
-    }
-
     private AddExpenseRequest makeExpenseRequest(int type, int amount, List<Long> participantIds) {
         AddExpenseRequest req = new AddExpenseRequest();
         req.setType(type);
         req.setAmount(amount);
         req.setParticipantIds(participantIds);
         return req;
+    }
+
+    private AddTransferRequest makeTransferRequest(Long toUserId, String amount) {
+        AddTransferRequest.TransferEntry transfer = new AddTransferRequest.TransferEntry();
+        transfer.setToUserId(toUserId);
+        transfer.setAmount(new BigDecimal(amount));
+        AddTransferRequest request = new AddTransferRequest();
+        request.setTransfers(List.of(transfer));
+        return request;
+    }
+
+    private void configureRoomView(CardRoom room, List<CardRoomMember> members) {
+        when(cardRoomMemberMapper.selectByRoomId(room.getId())).thenReturn(members);
+        when(cardExpenseMapper.selectByRoomId(eq(room.getId()), anyInt())).thenReturn(List.of());
+        when(userMapper.selectBatchIds(anyCollection())).thenAnswer(invocation -> {
+            List<User> users = new ArrayList<>();
+            for (CardRoomMember member : members) {
+                User user = new User();
+                user.setId(member.getUserId());
+                user.setUsername("user-" + member.getUserId());
+                users.add(user);
+            }
+            return users;
+        });
     }
 
     private CardRoomMember makeMember(Long roomId, Long userId, int totalScore) {

@@ -1,5 +1,7 @@
 package com.cinoo.matchmateserver.model.request;
 
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -22,8 +24,10 @@ public class AddTransferRequest {
         @NotNull(message = "收款人ID不能为空")
         private Long toUserId;
 
-        /** 金额（元），>=0，最多1位小数 */
+        /** 金额（元），仅允许 1 到 999999 的正整数 */
         @NotNull(message = "金额不能为空")
+        @DecimalMin(value = "1", message = "金额必须为正整数")
+        @Digits(integer = 6, fraction = 0, message = "金额只能输入1到999999的正整数")
         private BigDecimal amount;
     }
 }

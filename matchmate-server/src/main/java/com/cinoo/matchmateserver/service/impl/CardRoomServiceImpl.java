@@ -13,6 +13,7 @@ import com.cinoo.matchmateserver.model.request.AddRoundRequest;
 import com.cinoo.matchmateserver.model.request.AddTransferRequest;
 import com.cinoo.matchmateserver.model.vo.*;
 import com.cinoo.matchmateserver.service.CardRoomService;
+import com.cinoo.matchmateserver.service.DataRetentionService;
 import com.cinoo.matchmateserver.service.UserService;
 import com.cinoo.matchmateserver.websocket.CardWebSocketHandler;
 import jakarta.servlet.http.HttpServletRequest;
@@ -46,6 +47,7 @@ public class CardRoomServiceImpl implements CardRoomService {
     private final CardFundParticipantMapper cardFundParticipantMapper;
     private final UserMapper userMapper;
     private final UserService userService;
+    private final DataRetentionService dataRetentionService;
     private final CacheInvalidationService cacheInvalidationService;
     private final RedissonClient redissonClient;
     private final CardWebSocketHandler cardWebSocketHandler;
@@ -210,25 +212,20 @@ public class CardRoomServiceImpl implements CardRoomService {
             List<CardFundParticipant> fps = fundParticipantsByFundId.getOrDefault(fund.getId(), List.of());
             int shareCount = fps.size();
             if (shareCount == 0) continue;
+            if (fund.getCreatorId().equals(currentUserId)) {
+                balance += fund.getType() == CardConstant.FUND_TYPE_ADD
+                        ? fund.getAmount()
+                        : -fund.getAmount();
+            }
             int sharePerPerson = fund.getAmount() / shareCount;
             int remainder = fund.getAmount() % shareCount;
             int idx = 0;
             for (CardFundParticipant fp : fps) {
                 int charge = sharePerPerson + (idx < remainder ? 1 : 0);
                 if (fp.getUserId().equals(currentUserId)) {
-                    if (fund.getType() == CardConstant.FUND_TYPE_ADD) {
-                        if (fund.getCreatorId().equals(currentUserId)) {
-                            balance += fund.getAmount() - charge;
-                        } else {
-                            balance -= charge;
-                        }
-                    } else {
-                        if (fund.getCreatorId().equals(currentUserId)) {
-                            balance -= fund.getAmount() - charge;
-                        } else {
-                            balance += charge;
-                        }
-                    }
+                    balance += fund.getType() == CardConstant.FUND_TYPE_ADD
+                            ? -charge
+                            : charge;
                 }
                 idx++;
             }
@@ -425,14 +422,16 @@ public class CardRoomServiceImpl implements CardRoomService {
     public List<CardRoomHistoryVO> getHistory(int limit, HttpServletRequest request) {
         User user = loginUser(request);
         validateOverviewLimit(limit);
-        return cardRoomMapper.selectHistoryByUserId(user.getId(), limit);
+        return cardRoomMapper.selectHistoryByUserId(
+                user.getId(),
+                Math.min(limit, CardConstant.HISTORY_RETENTION_COUNT));
     }
 
     @Override
     public List<UserVO> getRanking(int limit, HttpServletRequest request) {
-        loginUser(request);
+        User user = loginUser(request);
         validateOverviewLimit(limit);
-        return userMapper.selectCardRanking(limit).stream()
+        return userMapper.selectCardRanking(user.getId(), limit).stream()
                 .map(userService::toUserVO)
                 .toList();
     }
@@ -482,21 +481,18 @@ public class CardRoomServiceImpl implements CardRoomService {
 
         List<AddTransferRequest.TransferEntry> transfers = req.getTransfers();
         Set<Long> seenUserIds = new HashSet<>();
+        Map<Long, Integer> amountsByUserId = new LinkedHashMap<>();
         int totalOut = 0;
         for (AddTransferRequest.TransferEntry t : transfers) {
-            if (t.getAmount().compareTo(BigDecimal.ZERO) < 0) {
-                throw new BusinessException(ErrorCode.PARAM_ERROR, "转账金额不能为负数");
-            }
-            if (t.getAmount().scale() > 1) {
-                throw new BusinessException(ErrorCode.PARAM_ERROR, "金额最多支持1位小数");
-            }
+            int amount = requirePositiveIntegerAmount(t.getAmount());
             if (!seenUserIds.add(t.getToUserId())) {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "不能重复转账给同一人");
             }
             if (t.getToUserId().equals(user.getId())) {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "不能转账给自己");
             }
-            totalOut += t.getAmount().movePointRight(2).intValueExact();
+            amountsByUserId.put(t.getToUserId(), amount);
+            totalOut = Math.addExact(totalOut, amount);
         }
 
         List<Long> activeMemberIds = cardRoomMapper.selectActiveMemberIds(roomId);
@@ -511,13 +507,10 @@ public class CardRoomServiceImpl implements CardRoomService {
         selfEntry.setScore(-totalOut);
         scoreEntries.add(selfEntry);
         for (AddTransferRequest.TransferEntry t : transfers) {
-            int amountFen = t.getAmount().movePointRight(2).intValueExact();
-            if (amountFen > 0) {
-                AddRoundRequest.ScoreEntry entry = new AddRoundRequest.ScoreEntry();
-                entry.setUserId(t.getToUserId());
-                entry.setScore(amountFen);
-                scoreEntries.add(entry);
-            }
+            AddRoundRequest.ScoreEntry entry = new AddRoundRequest.ScoreEntry();
+            entry.setUserId(t.getToUserId());
+            entry.setScore(amountsByUserId.get(t.getToUserId()));
+            scoreEntries.add(entry);
         }
 
         int sum = scoreEntries.stream().mapToInt(AddRoundRequest.ScoreEntry::getScore).sum();
@@ -581,13 +574,7 @@ public class CardRoomServiceImpl implements CardRoomService {
                 req.getType() != CardConstant.FUND_TYPE_DEDUCT) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "资金类型错误");
         }
-        if (req.getAmount().compareTo(BigDecimal.ZERO) < 0) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "金额不能为负数");
-        }
-        if (req.getAmount().scale() > 1) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "金额最多支持1位小数");
-        }
-
+        int amountYuan = requirePositiveIntegerAmount(req.getAmount());
         List<Long> participantIds = req.getParticipantIds();
         Set<Long> participantSet = new LinkedHashSet<>(participantIds);
         if (participantSet.size() != participantIds.size()) {
@@ -599,10 +586,7 @@ public class CardRoomServiceImpl implements CardRoomService {
             throw new BusinessException(ErrorCode.ROUND_MEMBER_MISSING, "分摊人包含非房间成员");
         }
 
-        int amountFen = req.getAmount().movePointRight(2).intValueExact();
-        if (amountFen <= 0) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "金额必须大于0");
-        }
+        int amountFen = Math.multiplyExact(amountYuan, 100);
 
         String lockKey = CardConstant.LOCK_FUND + roomId;
         RLock lock = redissonClient.getLock(lockKey);
@@ -638,7 +622,7 @@ public class CardRoomServiceImpl implements CardRoomService {
         pushAfterCommit(
                 roomId,
                 user.getId(),
-                CardWebSocketHandler.EVENT_EXPENSE_CREATED,
+                CardWebSocketHandler.EVENT_FUND_CREATED,
                 vo.getRecentFunds().get(0));
         return vo;
     }
@@ -789,6 +773,7 @@ public class CardRoomServiceImpl implements CardRoomService {
 
             CardRoomVO vo = toRoomVO(room, user.getId());
             pushAfterCommit(roomId, user.getId(), CardWebSocketHandler.EVENT_ROOM_CLOSED, vo);
+            runAfterCommit(this::cleanupCardHistorySafely);
             return vo;
 
         } catch (InterruptedException e) {
@@ -812,16 +797,39 @@ public class CardRoomServiceImpl implements CardRoomService {
         }
     }
 
+    private int requirePositiveIntegerAmount(BigDecimal amount) {
+        if (amount == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "金额不能为空");
+        }
+        try {
+            int value = amount.intValueExact();
+            if (value <= 0 || value > 999_999) {
+                throw new BusinessException(
+                        ErrorCode.PARAM_ERROR,
+                        "金额只能输入1到999999的正整数");
+            }
+            return value;
+        } catch (ArithmeticException e) {
+            throw new BusinessException(
+                    ErrorCode.PARAM_ERROR,
+                    "金额只能输入1到999999的正整数");
+        }
+    }
+
     private void pushAfterCommit(Long roomId, Long excludeUserId, String type, Object data) {
+        runAfterCommit(() -> safePush(roomId, excludeUserId, type, data));
+    }
+
+    private void runAfterCommit(Runnable action) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            safePush(roomId, excludeUserId, type, data);
+            action.run();
             return;
         }
         TransactionSynchronizationManager.registerSynchronization(
                 new TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
-                        safePush(roomId, excludeUserId, type, data);
+                        action.run();
                     }
                 });
     }
@@ -850,6 +858,14 @@ public class CardRoomServiceImpl implements CardRoomService {
             cardWebSocketHandler.pushEvent(roomId, excludeUserId, type, data);
         } catch (Exception e) {
             log.error("WS push failed type={} roomId={}", type, roomId, e);
+        }
+    }
+
+    private void cleanupCardHistorySafely() {
+        try {
+            dataRetentionService.cleanupExpiredCardRooms();
+        } catch (RuntimeException e) {
+            log.error("Card history retention cleanup failed", e);
         }
     }
 }

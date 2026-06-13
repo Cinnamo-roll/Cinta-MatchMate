@@ -28,4 +28,22 @@ public interface CardRoomMapper extends BaseMapper<CardRoom> {
     List<CardRoomHistoryVO> selectHistoryByUserId(
             @Param("userId") Long userId,
             @Param("limit") int limit);
+
+    List<Long> selectExpiredEndedRoomIds(@Param("retainCount") int retainCount);
+
+    int deleteFundParticipantsByRoomIds(@Param("roomIds") List<Long> roomIds);
+
+    int deleteFundsByRoomIds(@Param("roomIds") List<Long> roomIds);
+
+    int deleteExpenseParticipantsByRoomIds(@Param("roomIds") List<Long> roomIds);
+
+    int deleteExpensesByRoomIds(@Param("roomIds") List<Long> roomIds);
+
+    int deleteRoundScoresByRoomIds(@Param("roomIds") List<Long> roomIds);
+
+    int deleteRoundsByRoomIds(@Param("roomIds") List<Long> roomIds);
+
+    int deleteMembersByRoomIds(@Param("roomIds") List<Long> roomIds);
+
+    int deleteRoomsByIds(@Param("roomIds") List<Long> roomIds);
 }

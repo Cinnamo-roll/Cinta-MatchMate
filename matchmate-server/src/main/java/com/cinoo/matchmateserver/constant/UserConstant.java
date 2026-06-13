@@ -13,4 +13,8 @@ public final class UserConstant {
     public static final int ADMIN_ROLE = 1;
 
     public static final int DEFAULT_ROLE = 0;
+
+    public static final int NORMAL_STATUS = 0;
+
+    public static final int BANNED_STATUS = 1;
 }

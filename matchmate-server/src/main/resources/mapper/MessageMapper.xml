@@ -48,4 +48,24 @@
           AND status = 0
     </update>
 
+    <select id="selectConversationIdsBefore" resultType="long">
+        SELECT DISTINCT conversationId
+        FROM message
+        WHERE createTime &lt; #{cutoff}
+    </select>
+
+    <delete id="deleteBefore">
+        DELETE FROM message
+        WHERE createTime &lt; #{cutoff}
+    </delete>
+
+    <select id="selectLatestByConversationId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM message
+        WHERE isDelete = 0
+          AND conversationId = #{conversationId}
+        ORDER BY createTime DESC, id DESC
+        LIMIT 1
+    </select>
+
 </mapper>

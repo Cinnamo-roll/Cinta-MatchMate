@@ -113,6 +113,36 @@ class UserControllerTest {
     }
 
     @Test
+    void updateUserStatusUsesValidatedRequest() throws Exception {
+        mockMvc.perform(put("/user/2/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "userStatus": 1
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+
+        verify(userService).updateUserStatus(eq(2L), eq(1), any());
+    }
+
+    @Test
+    void updateUserStatusRejectsUnsupportedStatus() throws Exception {
+        mockMvc.perform(put("/user/2/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "userStatus": 2
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.PARAM_ERROR.getCode()));
+
+        verify(userService, never()).updateUserStatus(anyLong(), anyInt(), any());
+    }
+
+    @Test
     void searchUsersSupportsKeywordAndTags() throws Exception {
         when(userService.searchUserByTags("玉桂狗", java.util.List.of("咖啡")))
                 .thenReturn(java.util.List.of());
