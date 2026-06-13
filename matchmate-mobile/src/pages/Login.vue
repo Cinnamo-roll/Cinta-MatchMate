@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { login } from '../api/matchmate';
 import { useNotify } from '../composables/useNotify';
+import { getRequestErrorMessage } from '../utils/http';
 
 const router = useRouter();
+const route = useRoute();
 const { showNotify } = useNotify();
 
 const loggingIn = ref(false);
@@ -23,10 +25,15 @@ const submitLogin = async () => {
     loggingIn.value = true;
     await login(loginForm.value);
     showNotify('登录成功', 'success');
-    router.replace('/user');
-  } catch {
+    const redirect = typeof route.query.redirect === 'string'
+      && route.query.redirect.startsWith('/')
+      && !route.query.redirect.startsWith('//')
+      ? route.query.redirect
+      : '/user';
+    router.replace(redirect);
+  } catch (error) {
     loginForm.value.userPassword = '';
-    showNotify('账号或密码错误');
+    showNotify(getRequestErrorMessage(error, '账号或密码错误'));
   } finally {
     loggingIn.value = false;
   }

@@ -3,7 +3,7 @@ import axios from 'axios';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useNotify } from '../composables/useNotify';
-import { getGenderText, getRoleText, MAX_TAGS } from '../utils/user';
+import { getGenderText, getRoleText, isAdmin, MAX_TAGS } from '../utils/user';
 import { useTagSelection } from '../composables/useTagSelection';
 import {
   getCurrentUser,
@@ -394,6 +394,16 @@ const onAvatarFileSelected = async (event: Event) => {
         </van-cell>
       </van-cell-group>
 
+      <van-cell-group v-if="isAdmin(user.userRole)" class="admin-entry">
+        <van-cell
+          title="用户管理"
+          label="封停或恢复普通用户账号"
+          icon="manager-o"
+          is-link
+          @click="router.push('/admin/users')"
+        />
+      </van-cell-group>
+
       <section class="user-tags-section">
         <div class="tags-heading">
           <div>
@@ -613,9 +623,18 @@ const onAvatarFileSelected = async (event: Event) => {
 <style scoped>
 .user-page {
   position: relative;
-  height: 100%;
+  height: calc(100dvh - var(--van-nav-bar-height, 46px));
   padding-bottom: 62px;
+  overflow-y: auto;
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
   background: #f7f8fa;
+  box-sizing: border-box;
+  scrollbar-width: none;
+}
+
+.user-page::-webkit-scrollbar {
+  display: none;
 }
 
 .page-loading {
@@ -686,6 +705,10 @@ const onAvatarFileSelected = async (event: Event) => {
   margin-top: 12px;
   padding: 16px;
   background: #fff;
+}
+
+.admin-entry {
+  margin-top: 12px;
 }
 
 .tags-heading,

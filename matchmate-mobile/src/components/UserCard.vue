@@ -78,14 +78,15 @@ onMounted(async () => {
       </div>
     </div>
 
-    <van-icon
-      v-if="user.isOnline && user.id !== myId"
-      name="chat-o"
-      size="22"
-      color="#07c160"
-      class="chat-icon"
+    <button
+      v-if="user.id !== myId"
+      class="chat-button"
+      type="button"
+      :aria-label="`给${user.username || user.userAccount}留言`"
       @click.stop="startChat(user)"
-    />
+    >
+      <van-icon name="chat-o" size="22" />
+    </button>
   </article>
 </template>
 
@@ -195,11 +196,24 @@ onMounted(async () => {
   font-size: 13px;
 }
 
-.chat-icon {
+.chat-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  padding: 8px;
-  margin: -8px;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  color: #1989fa;
+  background: #ecf9ff;
+  border: 0;
+  border-radius: 50%;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+
+.chat-button:active {
+  background: #d8f3ff;
+  transform: scale(0.96);
 }
 </style>

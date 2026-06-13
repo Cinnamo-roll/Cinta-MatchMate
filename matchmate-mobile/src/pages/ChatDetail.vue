@@ -142,11 +142,20 @@ const handleSend = async () => {
   }
 };
 
-const handleNewMessage = (payload: WsPushPayload) => {
+const handleWsMessage = (payload: WsPushPayload) => {
+  if (payload.type === 'messages_read') {
+    if (payload.data.conversationId !== conversationId) return;
+    messages.value.forEach((message) => {
+      if (isSelf(message) && message.status === 0) {
+        message.status = 1;
+      }
+    });
+    return;
+  }
   if (payload.type !== 'new_message') return;
+
   const msg = payload.data;
-  if (!isMsgRelevant(msg)) return;
-  if (messages.value.some((m) => m.id === msg.id)) return;
+  if (!isMsgRelevant(msg) || messages.value.some((m) => m.id === msg.id)) return;
   messages.value.push(msg);
   scrollToBottom();
   if (conversationId > 0) void openConversation(conversationId);
@@ -164,7 +173,7 @@ onMounted(async () => {
     showNotify('请先登录'); router.replace('/user'); return;
   }
   connect();
-  unsubMessage = onMessage(handleNewMessage);
+  unsubMessage = onMessage(handleWsMessage);
 
   // 新会话：尝试查找已有会话 ID
   if (conversationId === 0 && targetUserId.value > 0) {
@@ -221,6 +230,7 @@ onUnmounted(() => {
     </van-nav-bar>
 
     <div ref="messageListEl" class="message-list" @scroll="onScroll">
+      <div class="retention-notice">聊天记录仅保留 24 小时</div>
       <div v-if="loadingMore" class="load-more-hint">加载更多...</div>
       <van-loading v-if="loading" class="page-loading" vertical>加载中...</van-loading>
 
@@ -246,7 +256,12 @@ onUnmounted(() => {
             <div class="msg-bubble" :class="{ 'msg-bubble--self': isSelf(msg) }">
               <span class="msg-text">{{ msg.content }}</span>
             </div>
-            <div class="msg-time">{{ formatTime(msg.createTime) }}</div>
+            <div class="msg-meta">
+              <span>{{ formatTime(msg.createTime) }}</span>
+              <span v-if="isSelf(msg)" :class="{ read: msg.status === 1 }">
+                {{ msg.status === 1 ? '已读' : '未读' }}
+              </span>
+            </div>
           </div>
 
           <!-- 自己头像 -->
@@ -293,6 +308,12 @@ onUnmounted(() => {
 .chat-navbar-title span.online { color: #07c160; }
 .message-list { flex: 1; overflow-y: auto; padding: 12px 16px; -webkit-overflow-scrolling: touch; }
 .load-more-hint { text-align: center; padding: 8px; font-size: 12px; color: #999; }
+.retention-notice {
+  margin: 0 auto 12px;
+  color: #969799;
+  font-size: 11px;
+  text-align: center;
+}
 .page-loading { padding-top: 80px; }
 
 .msg-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 16px; }
@@ -312,7 +333,14 @@ onUnmounted(() => {
 .msg-bubble--self { background: #07c160; color: #fff; border-radius: 12px 12px 4px 12px; }
 
 .msg-text { font-size: 15px; line-height: 1.4; }
-.msg-time { font-size: 11px; color: #999; margin-top: 4px; }
+.msg-meta {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+  color: #999;
+  font-size: 11px;
+}
+.msg-meta .read { color: #1989fa; }
 
 .input-bar {
   display: flex; align-items: center; gap: 8px;

@@ -3,6 +3,7 @@ import type { AxiosResponse } from 'axios';
 import type {
   BaseResponse,
   LoginRequest,
+  PageResponse,
   RegisterRequest,
   TagCategory,
   UpdateUserProfileRequest,
@@ -87,4 +88,25 @@ export const uploadAvatar = async (file: File) => {
   return unwrap(
     await myAxios.post<BaseResponse<User>>('/user/avatar', formData),
   );
+};
+
+export const searchAdminUsers = async (
+  keyword = '',
+  pageNum = 1,
+  pageSize = 20,
+) =>
+  unwrap(
+    await myAxios.get<BaseResponse<PageResponse<User>>>('/user/search', {
+      params: {
+        username: keyword.trim() || undefined,
+        pageNum,
+        pageSize,
+      },
+    }),
+  );
+
+export const updateUserStatus = async (userId: number, userStatus: number) => {
+  await myAxios.put<BaseResponse<null>>(`/user/${userId}/status`, {
+    userStatus,
+  });
 };

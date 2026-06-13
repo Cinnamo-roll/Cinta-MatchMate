@@ -3,13 +3,15 @@ import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useNotify } from '../composables/useNotify';
 import { useWebSocket } from '../composables/useWebSocket';
+import { logout } from '../api/matchmate';
+import type { WsPushPayload } from '../models/chat';
 
 type TabName = 'index' | 'discover' | 'message' | 'user';
 
 const route = useRoute();
 const router = useRouter();
-const { message: notifyMsg, type: notifyType } = useNotify();
-const { connect, disconnect } = useWebSocket();
+const { message: notifyMsg, type: notifyType, showNotify } = useNotify();
+const { connect, disconnect, forceDisconnect, onMessage } = useWebSocket();
 
 const tabRoutes: Record<TabName, string> = {
   index: '/',
@@ -57,8 +59,25 @@ const setDocumentScrollLock = (locked: boolean) => {
 };
 
 watch(lockScroll, setDocumentScrollLock, { immediate: true });
-onMounted(() => connect());
-onBeforeUnmount(() => { setDocumentScrollLock(false); disconnect(); });
+let unsubscribeWs: (() => void) | null = null;
+
+const handleWsMessage = (payload: WsPushPayload) => {
+  if (payload.type !== 'account_banned') return;
+  forceDisconnect();
+  void logout().catch(() => undefined);
+  showNotify(payload.data.message || '账号已被封禁，请联系管理员');
+  router.replace('/login');
+};
+
+onMounted(() => {
+  connect();
+  unsubscribeWs = onMessage(handleWsMessage);
+});
+onBeforeUnmount(() => {
+  unsubscribeWs?.();
+  setDocumentScrollLock(false);
+  disconnect();
+});
 </script>
 
 <template>

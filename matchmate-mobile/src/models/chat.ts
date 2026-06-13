@@ -26,7 +26,20 @@ export type SendMessageRequest = {
   content: string;
 };
 
+export type MessagesReadPayload = {
+  conversationId: number;
+  readerId: number;
+};
+
 export type WsPushPayload = {
   type: 'new_message';
   data: MessageVO;
+} | {
+  type: 'messages_read';
+  data: MessagesReadPayload;
+} | {
+  type: 'account_banned';
+  data: {
+    message: string;
+  };
 };

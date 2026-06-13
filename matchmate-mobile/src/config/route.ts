@@ -8,12 +8,13 @@ import ChatDetail from '../pages/ChatDetail.vue';
 import Discover from '../pages/Discover.vue';
 import CardLedger from '../pages/CardLedger.vue';
 import CardRoom from '../pages/CardRoom.vue';
+import AdminUsers from '../pages/AdminUsers.vue';
 
 const routes = [
   { path: '/', component: Index, meta: { title: 'MatchMate' } },
   { path: '/discover', component: Discover, meta: { title: '发现' } },
   { path: '/team', component: Team, meta: { title: '消息' } },
-  { path: '/user', component: User, meta: { title: '我的', lockScroll: true } },
+  { path: '/user', component: User, meta: { title: '我的' } },
   {
     path: '/discover/card-ledger',
     component: CardLedger,
@@ -33,6 +34,11 @@ const routes = [
     path: '/search',
     component: Search,
     meta: { title: '搜索伙伴', showBack: true, hideTabbar: true },
+  },
+  {
+    path: '/admin/users',
+    component: AdminUsers,
+    meta: { title: '用户管理', showBack: true, hideTabbar: true },
   },
   {
     path: '/login',

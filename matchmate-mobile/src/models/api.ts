@@ -5,6 +5,13 @@ export type BaseResponse<T> = {
   description: string;
 };
 
+export type PageResponse<T> = {
+  total: number;
+  pageNum: number;
+  pageSize: number;
+  records: T[];
+};
+
 export type TagCategory = {
   category: string;
   tags: string[];

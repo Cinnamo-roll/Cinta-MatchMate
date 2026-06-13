@@ -27,7 +27,7 @@ export const getRoomDetail = async (roomId: number) =>
 export const getActiveRoom = async () =>
   unwrap(await myAxios.get<BaseResponse<CardRoomVO | null>>('/card-room/active-room'));
 
-export const getCardHistory = async (limit = 10) =>
+export const getCardHistory = async (limit = 6) =>
   unwrap(
     await myAxios.get<BaseResponse<CardRoomHistory[]>>('/card-room/history', {
       params: { limit },

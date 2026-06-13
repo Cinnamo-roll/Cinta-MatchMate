@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useNotify } from '../composables/useNotify';
 import {
   createRoom,
@@ -12,13 +12,16 @@ import {
 import { getCurrentUser } from '../api/matchmate';
 import type { CardRoomHistory } from '../models/card';
 import type { User } from '../models/user';
+import { getRequestErrorMessage, isUnauthorizedError } from '../utils/http';
 
 const router = useRouter();
+const route = useRoute();
 const { showNotify } = useNotify();
 
 const currentUser = ref<User | null>(null);
 const loading = ref(false);
 const loadFailed = ref(false);
+const loginRequired = ref(false);
 const joinCode = ref('');
 const showJoin = ref(false);
 const checking = ref(true);
@@ -27,6 +30,7 @@ const history = ref<CardRoomHistory[]>([]);
 
 const loadData = async () => {
   loadFailed.value = false;
+  loginRequired.value = false;
   checking.value = true;
   try {
     const user = await getCurrentUser();
@@ -42,8 +46,16 @@ const loadData = async () => {
     ]);
     ranking.value = r;
     history.value = h;
-  } catch {
-    loadFailed.value = true;
+  } catch (error) {
+    if (isUnauthorizedError(error)) {
+      currentUser.value = null;
+      ranking.value = [];
+      history.value = [];
+      loginRequired.value = true;
+      showNotify('请先登录后使用打牌记账本');
+    } else {
+      loadFailed.value = true;
+    }
   } finally {
     checking.value = false;
   }
@@ -51,26 +63,43 @@ const loadData = async () => {
 
 onMounted(loadData);
 
+const goToLogin = () => {
+  router.push({
+    path: '/login',
+    query: { redirect: route.fullPath },
+  });
+};
+
+const requireLogin = () => {
+  if (currentUser.value) return true;
+  showNotify('请先登录后使用打牌记账本');
+  goToLogin();
+  return false;
+};
+
 const handleCreate = async () => {
-  if (!currentUser.value) {
-    router.push('/login');
-    return;
-  }
+  if (!requireLogin()) return;
   loading.value = true;
   try {
     const room = await createRoom();
     router.replace(`/card-room/${room.roomId}`);
-  } catch (e: any) {
-    showNotify(e?.response?.data?.description || e?.message || '创建失败');
+  } catch (error) {
+    if (isUnauthorizedError(error)) {
+      currentUser.value = null;
+      loginRequired.value = true;
+      showNotify('登录状态已失效，请重新登录');
+      goToLogin();
+      return;
+    }
+    showNotify(getRequestErrorMessage(error, '创建房间失败'));
   } finally {
     loading.value = false;
   }
 };
 
 const handleJoin = async () => {
-  if (!currentUser.value) {
+  if (!requireLogin()) {
     showJoin.value = false;
-    router.push('/login');
     return;
   }
   const code = joinCode.value.trim();
@@ -84,8 +113,16 @@ const handleJoin = async () => {
     showJoin.value = false;
     joinCode.value = '';
     router.replace(`/card-room/${room.roomId}`);
-  } catch (e: any) {
-    showNotify(e?.response?.data?.description || e?.message || '加入失败');
+  } catch (error) {
+    if (isUnauthorizedError(error)) {
+      currentUser.value = null;
+      loginRequired.value = true;
+      showJoin.value = false;
+      showNotify('登录状态已失效，请重新登录');
+      goToLogin();
+      return;
+    }
+    showNotify(getRequestErrorMessage(error, '加入房间失败'));
   } finally {
     loading.value = false;
   }
@@ -119,9 +156,9 @@ const formatDate = (value: string) =>
           <span>{{ currentUser.winRate ? (currentUser.winRate * 100).toFixed(1) : '0.0' }}%</span>
         </div>
       </div>
-      <div v-if="!currentUser && !loadFailed" class="login-hint">
+      <div v-if="loginRequired || (!currentUser && !loadFailed)" class="login-hint">
         <span>登录后可查看积分</span>
-        <van-button size="small" round type="primary" @click="router.push('/login')">去登录</van-button>
+        <van-button size="small" round type="primary" @click="goToLogin">去登录</van-button>
       </div>
       <div class="action-grid" v-if="currentUser">
         <button class="action-btn create-btn" @click="handleCreate" :disabled="loading">
@@ -149,7 +186,10 @@ const formatDate = (value: string) =>
           <van-empty v-else-if="!loadFailed" image-size="52" description="暂无积分排名" />
         </section>
         <section class="overview-section">
-          <div class="section-title">最近记录</div>
+          <div class="section-title-row">
+            <div class="section-title">最近记录</div>
+            <span class="retention-hint">仅保留最近 6 条</span>
+          </div>
           <div v-if="history.length" class="history-scroll">
             <button v-for="item in history" :key="item.roomId" type="button" class="history-item"
               @click="router.push(`/card-room/${item.roomId}`)">
@@ -246,6 +286,13 @@ const formatDate = (value: string) =>
   display: flex; flex-direction: column;
 }
 .section-title { margin-bottom: 6px; flex-shrink: 0; color: #323233; font-size: 15px; font-weight: 600; }
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.section-title-row .section-title { margin-bottom: 6px; }
+.retention-hint { color: #969799; font-size: 11px; }
 .rank-scroll {
   flex: 1; min-height: 0; overflow-y: auto;
   -webkit-overflow-scrolling: touch;

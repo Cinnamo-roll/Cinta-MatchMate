@@ -9,6 +9,7 @@ import { getCurrentUser } from '../api/matchmate';
 import { CardWsEvent } from '../models/card';
 import type { CardRoomVO, CardWsPayload } from '../models/card';
 import type { User } from '../models/user';
+import { getRequestErrorMessage, isUnauthorizedError } from '../utils/http';
 
 const route = useRoute();
 const router = useRouter();
@@ -19,7 +20,8 @@ const roomId = Number(route.params.id);
 const room = ref<CardRoomVO | null>(null);
 const currentUser = ref<User | null>(null);
 const loading = ref(true);
-const loadFailed = ref(false);
+const loginRequired = ref(false);
+const POSITIVE_INTEGER_PATTERN = /^[1-9]\d{0,5}$/;
 
 // 每局记账弹窗
 const showTransfer = ref(false);
@@ -40,26 +42,52 @@ const otherMembers = computed(() => activeMembers.value.filter((m) => m.userId !
 
 // 每局转账合计
 const transferSum = computed(() =>
-  Object.values(transferAmounts.value).reduce((s, v) => s + (parseFloat(v) || 0), 0),
+  Object.values(transferAmounts.value).reduce(
+    (sum, value) => sum + (POSITIVE_INTEGER_PATTERN.test(value) ? Number(value) : 0),
+    0,
+  ),
 );
+
+const goToLogin = () => {
+  router.replace({
+    path: '/login',
+    query: { redirect: route.fullPath },
+  });
+};
+
+const handleRequestError = (error: unknown, fallback: string) => {
+  if (isUnauthorizedError(error)) {
+    loginRequired.value = true;
+    room.value = null;
+    showNotify('登录状态已失效，请重新登录');
+    goToLogin();
+    return;
+  }
+  showNotify(getRequestErrorMessage(error, fallback));
+};
 
 const loadRoom = async () => {
   if (!Number.isSafeInteger(roomId) || roomId <= 0) {
-    loadFailed.value = true;
     loading.value = false;
     return;
   }
   try {
     loading.value = true;
-    loadFailed.value = false;
+    loginRequired.value = false;
     const [roomDetail, user] = await Promise.all([
       getRoomDetail(roomId),
       getCurrentUser(),
     ]);
     room.value = roomDetail;
     currentUser.value = user;
-  } catch {
-    loadFailed.value = true;
+  } catch (error) {
+    if (isUnauthorizedError(error)) {
+      loginRequired.value = true;
+      room.value = null;
+      showNotify('请先登录后查看房间');
+    } else {
+      room.value = null;
+    }
   } finally {
     loading.value = false;
   }
@@ -91,14 +119,18 @@ const handleLeave = async () => {
   try {
     await leaveRoom(roomId);
     router.replace('/discover/card-ledger');
-  } catch (e: any) { showNotify(e?.response?.data?.description || '退出失败'); }
+  } catch (error) {
+    handleRequestError(error, '退出房间失败');
+  }
 };
 
 const handleEnd = async () => {
   try { await showConfirmDialog({ title: '结束房间', message: '将结算所有成员积分并更新统计，确定吗？' }); }
   catch { return; }
   try { room.value = await endRoom(roomId); showNotify('房间已结算', 'success'); }
-  catch (e: any) { showNotify(e?.response?.data?.description || '结算失败'); }
+  catch (error) {
+    handleRequestError(error, '结算失败');
+  }
 };
 
 // ── 每局记账 ──
@@ -111,46 +143,32 @@ const openTransfer = () => {
 
 const submitTransfer = async () => {
   if (submitting.value) return;
-  const transfers = Object.entries(transferAmounts.value)
-    .filter(([, v]) => v !== '' && parseFloat(v) >= 0)
+  const entries = Object.entries(transferAmounts.value)
+    .filter(([, value]) => value.trim() !== '');
+  if (entries.some(([, value]) => !POSITIVE_INTEGER_PATTERN.test(value))) {
+    showNotify('金额只能输入 1 到 999999 的正整数');
+    return;
+  }
+  const transfers = entries
     .map(([uid, v]) => {
-      const num = parseFloat(v);
-      if (isNaN(num) || num < 0) throw new Error('金额无效');
-      if (String(num).includes('.') && String(num).split('.')[1].length > 1) {
-        showNotify('金额最多支持1位小数');
-        throw new Error('小数超限');
-      }
-      return { toUserId: Number(uid), amount: num };
+      return { toUserId: Number(uid), amount: Number(v) };
     });
   if (!transfers.length) { showNotify('请至少输入一笔转账'); return; }
-
-  // 校验小数位数
-  for (const t of transfers) {
-    const s = String(t.amount);
-    if (s.includes('.') && s.split('.')[1].length > 1) {
-      showNotify('金额最多支持1位小数');
-      return;
-    }
-  }
 
   submitting.value = true;
   try {
     room.value = await addTransfer(roomId, { transfers });
     showTransfer.value = false;
     showNotify('转账已记录', 'success');
-  } catch (e: any) {
-    showNotify(e?.response?.data?.description || e?.message || '记录失败');
+  } catch (error) {
+    handleRequestError(error, '记录牌局失败');
   } finally {
     submitting.value = false;
   }
 };
 
 const onTransferInput = (userId: number, value: string) => {
-  // 只允许数字和一个小数点
-  const cleaned = value.replace(/[^\d.]/g, '')
-    .replace(/^\./, '')
-    .replace(/(\..*)\./g, '$1')
-    .replace(/(\.\d{2})\d+/, '$1');
+  const cleaned = value.replace(/\D/g, '').slice(0, 6);
   transferAmounts.value[userId] = cleaned;
 };
 
@@ -164,13 +182,11 @@ const openFund = () => {
 
 const submitFund = async () => {
   if (submitting.value) return;
-  const amount = parseFloat(fundAmount.value);
-  if (isNaN(amount) || amount <= 0) { showNotify('请输入有效金额'); return; }
-  const s = String(amount);
-  if (s.includes('.') && s.split('.')[1].length > 1) {
-    showNotify('金额最多支持1位小数');
+  if (!POSITIVE_INTEGER_PATTERN.test(fundAmount.value)) {
+    showNotify('金额只能输入 1 到 999999 的正整数');
     return;
   }
+  const amount = Number(fundAmount.value);
   if (!fundParticipantIds.value.length) { showNotify('请至少选择一位分摊成员'); return; }
 
   submitting.value = true;
@@ -182,8 +198,8 @@ const submitFund = async () => {
     });
     showFund.value = false;
     showNotify('资金已记录', 'success');
-  } catch (e: any) {
-    showNotify(e?.response?.data?.description || e?.message || '记录失败');
+  } catch (error) {
+    handleRequestError(error, '记录资金失败');
   } finally {
     submitting.value = false;
   }
@@ -211,6 +227,12 @@ const formatTime = (t: string) =>
 <template>
   <div class="room-page">
     <van-loading v-if="loading" class="page-loading" vertical>加载中...</van-loading>
+
+    <van-empty v-else-if="loginRequired" description="请先登录后查看房间">
+      <van-button round type="primary" size="small" @click="goToLogin">
+        去登录
+      </van-button>
+    </van-empty>
 
     <template v-else-if="room">
       <!-- 房间头部 -->
@@ -389,7 +411,9 @@ const formatTime = (t: string) =>
             <input
               :value="transferAmounts[m.userId] || ''"
               type="text"
-              inputmode="decimal"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              maxlength="6"
               placeholder="0"
               class="transfer-input"
               @input="onTransferInput(m.userId, ($event.target as HTMLInputElement).value)"
@@ -398,8 +422,9 @@ const formatTime = (t: string) =>
           </div>
         </div>
         <div class="transfer-sum" v-if="transferSum > 0">
-          你将转出合计：<b>{{ transferSum.toFixed(1) }} 元</b>
+          你将转出合计：<b>{{ transferSum.toFixed(0) }} 元</b>
         </div>
+        <div class="amount-hint">仅支持正整数，1 元 = 1 积分</div>
       </div>
     </van-dialog>
 
@@ -436,12 +461,16 @@ const formatTime = (t: string) =>
           <input
             v-model="fundAmount"
             type="text"
-            inputmode="decimal"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            maxlength="6"
             placeholder="0"
             class="fund-amount-input"
+            @input="fundAmount = fundAmount.replace(/\D/g, '').slice(0, 6)"
           />
           <span class="fund-unit">元</span>
         </div>
+        <div class="amount-hint">仅支持 1 到 999999 的正整数金额</div>
         <div class="fund-members">
           <div class="fund-members-title">参与分摊</div>
           <div class="fund-member-list">
@@ -689,6 +718,12 @@ const formatTime = (t: string) =>
 }
 .transfer-sum b {
   font-size: 17px;
+}
+.amount-hint {
+  margin: 6px 0 10px;
+  color: #969799;
+  font-size: 12px;
+  text-align: center;
 }
 
 /* 金额平摊弹窗 */

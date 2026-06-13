@@ -85,10 +85,15 @@ export const useWebSocket = () => {
     }
   };
 
+  const forceDisconnect = () => {
+    subscriberCount = 0;
+    doDisconnect();
+  };
+
   const onMessage = (callback: (payload: WsPushPayload) => void) => {
     listeners.add(callback);
     return () => listeners.delete(callback);
   };
 
-  return { connect, disconnect, connected, onMessage };
+  return { connect, disconnect, forceDisconnect, connected, onMessage };
 };

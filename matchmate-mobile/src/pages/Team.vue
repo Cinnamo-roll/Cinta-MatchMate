@@ -1,17 +1,21 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, computed } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useNotify } from '../composables/useNotify';
 import { getConversations, openConversation } from '../api/chat';
 import { useWebSocket } from '../composables/useWebSocket';
 import type { ConversationVO, WsPushPayload } from '../models/chat';
+import { getRequestErrorMessage, isUnauthorizedError } from '../utils/http';
 
 const router = useRouter();
+const route = useRoute();
 const { showNotify } = useNotify();
 const { connect, disconnect, onMessage } = useWebSocket();
 
 const conversations = ref<ConversationVO[]>([]);
 const loading = ref(false);
+const loadFailed = ref(false);
+const loginRequired = ref(false);
 const searchText = ref('');
 
 const filteredConversations = computed(() => {
@@ -26,12 +30,28 @@ const filteredConversations = computed(() => {
 const loadConversations = async () => {
   try {
     loading.value = true;
+    loadFailed.value = false;
+    loginRequired.value = false;
     conversations.value = await getConversations();
-  } catch {
-    showNotify('会话列表加载失败');
+  } catch (error) {
+    conversations.value = [];
+    if (isUnauthorizedError(error)) {
+      loginRequired.value = true;
+      showNotify('请先登录后查看消息');
+      return;
+    }
+    loadFailed.value = true;
+    showNotify(getRequestErrorMessage(error, '消息加载失败，请稍后重试'));
   } finally {
     loading.value = false;
   }
+};
+
+const goToLogin = () => {
+  router.push({
+    path: '/login',
+    query: { redirect: route.fullPath },
+  });
 };
 
 const handleNewMessage = (payload: WsPushPayload) => {
@@ -110,6 +130,10 @@ onUnmounted(() => {
 
 <template>
   <div class="conversation-page">
+    <div class="retention-notice">
+      <van-icon name="info-o" />
+      <span>聊天记录仅保留 24 小时，请及时查看重要信息</span>
+    </div>
     <!-- 搜索框 -->
     <div class="search-bar">
       <van-icon name="search" size="16" color="#999" />
@@ -131,6 +155,24 @@ onUnmounted(() => {
     <van-loading v-if="loading" class="page-loading" vertical>
       加载中...
     </van-loading>
+
+    <div v-else-if="loginRequired" class="login-hint">
+      <van-icon name="chat-o" size="28" color="#1989fa" />
+      <strong>请先登录后查看消息</strong>
+      <p>登录后可以查看会话、未读消息和聊天记录。</p>
+      <van-button round size="small" type="primary" @click="goToLogin">
+        去登录
+      </van-button>
+    </div>
+
+    <div v-else-if="loadFailed" class="login-hint">
+      <van-icon name="warning-o" size="28" color="#ee0a24" />
+      <strong>消息暂时加载失败</strong>
+      <p>网络可能开小差了，请稍后重试。</p>
+      <van-button round size="small" type="primary" @click="loadConversations">
+        重试
+      </van-button>
+    </div>
 
     <template v-else-if="filteredConversations.length > 0">
       <div
@@ -180,6 +222,43 @@ onUnmounted(() => {
 
 .page-loading {
   padding-top: 80px;
+}
+
+.login-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 48px 24px 0;
+  padding: 28px 18px;
+  color: #646566;
+  text-align: center;
+  background: #f7f8fa;
+  border-radius: 16px;
+}
+
+.login-hint strong {
+  color: #323233;
+  font-size: 16px;
+}
+
+.login-hint p {
+  margin: 0;
+  color: #969799;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.retention-notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 12px 0;
+  padding: 8px 10px;
+  color: #8a6d3b;
+  font-size: 12px;
+  background: #fff8e6;
+  border-radius: 8px;
 }
 
 .conv-item {
