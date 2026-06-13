@@ -329,10 +329,11 @@ onMounted(async () => {
 
 .selected-scroll {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   flex: 1;
   min-width: 0;
-  overflow-x: auto;
+  overflow-x: hidden;
   scrollbar-width: none;
 }
 

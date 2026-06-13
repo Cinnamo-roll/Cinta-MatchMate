@@ -5,7 +5,10 @@ body,
   min-width: 0;
   min-height: 100%;
   margin: 0;
-  overflow-x: clip;
+  max-width: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
 }
 
 body {
@@ -29,6 +32,13 @@ body.scroll-locked {
 
 * {
   box-sizing: border-box;
+}
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
 }
 
 button,

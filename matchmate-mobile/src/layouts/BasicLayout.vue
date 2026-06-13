@@ -147,15 +147,19 @@ onBeforeUnmount(() => {
   width: 100%;
   max-width: 100vw;
   min-height: 100vh;
-  overflow-x: clip;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
   background: #f7f8fa;
 }
 
 .layout-content {
   display: flow-root;
   width: 100%;
+  max-width: 100%;
   min-width: 0;
   min-height: calc(100dvh - 46px);
+  overflow-x: hidden;
 }
 
 .basic-layout--locked {

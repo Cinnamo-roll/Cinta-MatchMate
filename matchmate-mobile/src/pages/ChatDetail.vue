@@ -297,7 +297,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.chat-detail { display: flex; flex-direction: column; height: 100%; background: #f7f8fa; }
+.chat-detail { display: flex; flex-direction: column; height: 100%; max-width: 100%; overflow-x: hidden; touch-action: pan-y; background: #f7f8fa; }
 .chat-navbar {
   --van-nav-bar-height: 42px;
   --van-nav-bar-title-font-size: 15px;
@@ -306,7 +306,7 @@ onUnmounted(() => {
 .chat-navbar-title strong { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-navbar-title span { margin-top: 2px; color: #969799; font-size: 10px; font-weight: 400; }
 .chat-navbar-title span.online { color: #07c160; }
-.message-list { flex: 1; overflow-y: auto; padding: 12px 16px; -webkit-overflow-scrolling: touch; }
+.message-list { flex: 1; max-width: 100%; overflow-x: hidden; overflow-y: auto; padding: 12px 16px; overscroll-behavior-x: none; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
 .load-more-hint { text-align: center; padding: 8px; font-size: 12px; color: #999; }
 .retention-notice {
   margin: 0 auto 12px;
@@ -316,19 +316,19 @@ onUnmounted(() => {
 }
 .page-loading { padding-top: 80px; }
 
-.msg-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 16px; }
+.msg-row { display: flex; align-items: flex-start; gap: 8px; max-width: 100%; min-width: 0; margin-bottom: 16px; }
 .msg-row--self { justify-content: flex-end; }
 
 .msg-avatar { flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: #f5f5f5; overflow: hidden; }
 .msg-avatar :deep(img) { border-radius: 50%; }
 
-.msg-content { max-width: 70%; display: flex; flex-direction: column; }
+.msg-content { display: flex; flex-direction: column; max-width: 70%; min-width: 0; }
 .msg-content--self { align-items: flex-end; }
 
 .msg-bubble {
   display: inline-block; padding: 10px 14px; background: #fff;
   border-radius: 12px 12px 12px 4px;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 6%); word-break: break-word;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 6%); overflow-wrap: anywhere; word-break: break-word;
 }
 .msg-bubble--self { background: #07c160; color: #fff; border-radius: 12px 12px 4px 12px; }
 

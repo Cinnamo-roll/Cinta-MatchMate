@@ -215,8 +215,12 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: calc(100dvh - var(--van-nav-bar-height, 46px) - var(--van-tabbar-height, 50px));
+  max-width: 100%;
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior-x: none;
   overscroll-behavior-y: none;
+  touch-action: pan-y;
   background: #fff;
 }
 
@@ -255,6 +259,8 @@ onUnmounted(() => {
   gap: 6px;
   margin: 8px 12px 0;
   padding: 8px 10px;
+  max-width: calc(100% - 24px);
+  overflow: hidden;
   color: #8a6d3b;
   font-size: 12px;
   background: #fff8e6;
@@ -266,6 +272,10 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
   border-bottom: 1px solid #f5f5f5;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -310,6 +320,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  min-width: 0;
 }
 
 .conv-name {
@@ -331,9 +342,11 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  min-width: 0;
 }
 
 .conv-last-msg {
+  min-width: 0;
   font-size: 13px;
   color: #999;
   overflow: hidden;
@@ -349,6 +362,8 @@ onUnmounted(() => {
   gap: 8px;
   margin: 8px 12px;
   padding: 8px 12px;
+  max-width: calc(100% - 24px);
+  overflow: hidden;
   background: #f5f5f5;
   border-radius: 8px;
 }

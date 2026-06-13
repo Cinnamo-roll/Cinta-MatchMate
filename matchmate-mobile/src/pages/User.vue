@@ -434,6 +434,9 @@ const onAvatarFileSelected = async (event: Event) => {
       position="bottom"
       round
       closeable
+      class="profile-bottom-popup"
+      :z-index="3000"
+      teleport="body"
     >
       <div class="editor">
         <h3>{{ editorTitle }}</h3>
@@ -470,6 +473,9 @@ const onAvatarFileSelected = async (event: Event) => {
       position="bottom"
       round
       closeable
+      class="profile-bottom-popup"
+      :z-index="3000"
+      teleport="body"
       :style="{ height: '80%' }"
     >
       <div class="tag-editor">
@@ -535,6 +541,9 @@ const onAvatarFileSelected = async (event: Event) => {
     position="bottom"
     round
     closeable
+    class="profile-bottom-popup"
+    :z-index="3000"
+    teleport="body"
   >
     <div class="password-popup">
       <h3>修改密码</h3>
@@ -581,6 +590,9 @@ const onAvatarFileSelected = async (event: Event) => {
     position="bottom"
     round
     closeable
+    class="profile-bottom-popup"
+    :z-index="3000"
+    teleport="body"
   >
     <div class="delete-popup">
       <template v-if="deleteStep === 'password'">
@@ -776,7 +788,7 @@ const onAvatarFileSelected = async (event: Event) => {
 }
 
 .editor {
-  padding: 20px 16px 24px;
+  padding: 20px 16px calc(24px + env(safe-area-inset-bottom, 0px));
 }
 
 .editor h3 {
@@ -818,7 +830,7 @@ const onAvatarFileSelected = async (event: Event) => {
 
 .tag-category-list {
   flex: 1;
-  padding: 0 16px 90px;
+  padding: 0 16px calc(90px + env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
 }
 
@@ -835,14 +847,14 @@ const onAvatarFileSelected = async (event: Event) => {
   right: 0;
   bottom: 0;
   left: 0;
-  padding: 12px 16px 20px;
+  padding: 12px 16px calc(20px + env(safe-area-inset-bottom, 0px));
   background: #fff;
   box-shadow: 0 -2px 8px rgb(0 0 0 / 5%);
 }
 
 .password-popup,
 .delete-popup {
-  padding: 20px 16px 24px;
+  padding: 20px 16px calc(24px + env(safe-area-inset-bottom, 0px));
 }
 
 .password-popup h3,

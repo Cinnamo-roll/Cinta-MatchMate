@@ -23,7 +23,10 @@ const submitLogin = async () => {
 
   try {
     loggingIn.value = true;
-    await login(loginForm.value);
+    await login({
+      userAccount: loginForm.value.userAccount.trim(),
+      userPassword: loginForm.value.userPassword,
+    });
     showNotify('登录成功', 'success');
     const redirect = typeof route.query.redirect === 'string'
       && route.query.redirect.startsWith('/')

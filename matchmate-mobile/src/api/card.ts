@@ -6,7 +6,6 @@ import type {
   CardRoomVO,
   AddTransferRequest,
   AddFundRequest,
-  AddExpenseRequest,
 } from '../models/card';
 import type { User } from '../models/user';
 
@@ -55,9 +54,19 @@ export const addFund = async (roomId: number, req: AddFundRequest) =>
     await myAxios.post<BaseResponse<CardRoomVO>>(`/card-room/${roomId}/fund`, req),
   );
 
-export const addExpense = async (roomId: number, req: AddExpenseRequest) =>
+export const requestRoundUndo = async (roomId: number, roundId: number) =>
   unwrap(
-    await myAxios.post<BaseResponse<CardRoomVO>>(`/card-room/${roomId}/expense`, req),
+    await myAxios.post<BaseResponse<CardRoomVO>>(`/card-room/${roomId}/round/${roundId}/undo`),
+  );
+
+export const requestFundUndo = async (roomId: number, fundId: number) =>
+  unwrap(
+    await myAxios.post<BaseResponse<CardRoomVO>>(`/card-room/${roomId}/fund/${fundId}/undo`),
+  );
+
+export const approveUndo = async (roomId: number, requestId: number) =>
+  unwrap(
+    await myAxios.post<BaseResponse<CardRoomVO>>(`/card-room/${roomId}/undo/${requestId}/approve`),
   );
 
 export const endRoom = async (roomId: number) =>

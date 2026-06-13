@@ -148,7 +148,7 @@ const formatDate = (value: string) =>
         </van-image>
         <div class="user-stat-info">
           <strong>{{ currentUser.username || currentUser.userAccount }}</strong>
-          <span>总积分 <b>{{ currentUser.totalScore ?? 0 }}</b></span>
+          <span>赢得金额 <b>{{ currentUser.totalScore ?? 0 }}</b> 元</span>
         </div>
         <div class="user-stat-detail">
           <span>胜 {{ currentUser.wins ?? 0 }}</span>
@@ -157,7 +157,7 @@ const formatDate = (value: string) =>
         </div>
       </div>
       <div v-if="loginRequired || (!currentUser && !loadFailed)" class="login-hint">
-        <span>登录后可查看积分</span>
+        <span>登录后可查看自己的牌局账本</span>
         <van-button size="small" round type="primary" @click="goToLogin">去登录</van-button>
       </div>
       <div class="action-grid" v-if="currentUser">
@@ -172,7 +172,7 @@ const formatDate = (value: string) =>
       </div>
       <div class="bottom-sections" v-if="currentUser">
         <section class="overview-section">
-          <div class="section-title">积分排名</div>
+          <div class="section-title">排名</div>
           <div v-if="ranking.length" class="rank-scroll">
             <div v-for="(user, index) in ranking" :key="user.id" class="ranking-item">
               <span class="ranking-index">{{ index + 1 }}</span>
@@ -180,10 +180,10 @@ const formatDate = (value: string) =>
                 <template #error><van-icon name="contact" size="18" color="#c8c9cc" /></template>
               </van-image>
               <span class="ranking-name">{{ displayName(user) }}</span>
-              <b>{{ user.totalScore ?? 0 }}</b>
+              <b>{{ user.totalScore ?? 0 }} 元</b>
             </div>
           </div>
-          <van-empty v-else-if="!loadFailed" image-size="52" description="暂无积分排名" />
+          <van-empty v-else-if="!loadFailed" image-size="52" description="暂无排名" />
         </section>
         <section class="overview-section">
           <div class="section-title-row">
@@ -198,7 +198,7 @@ const formatDate = (value: string) =>
                 <small>{{ item.memberCount }} 人 · {{ formatDate(item.createTime) }}</small>
               </span>
               <b :class="item.score > 0 ? 'positive' : item.score < 0 ? 'negative' : ''">
-                {{ item.score > 0 ? '+' : '' }}{{ item.score }}
+                {{ item.score > 0 ? '+' : '' }}{{ item.score }} 元
               </b>
             </button>
           </div>

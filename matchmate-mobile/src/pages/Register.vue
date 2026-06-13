@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { register } from '../api/matchmate';
 import { useNotify } from '../composables/useNotify';
+import { getRequestErrorMessage } from '../utils/http';
 
 const router = useRouter();
 const { showNotify } = useNotify();
@@ -28,11 +29,15 @@ const submitRegister = async () => {
 
   try {
     registering.value = true;
-    await register(registerForm.value);
+    await register({
+      userAccount: userAccount.trim(),
+      userPassword,
+      checkPassword,
+    });
     showNotify('注册成功', 'success');
     router.replace('/login');
-  } catch {
-    showNotify('注册失败，账号可能已存在');
+  } catch (error) {
+    showNotify(getRequestErrorMessage(error, '注册失败，请检查账号或密码'));
   } finally {
     registering.value = false;
   }
