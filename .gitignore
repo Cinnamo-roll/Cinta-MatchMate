@@ -1,16 +1,12 @@
-# 根目录：仅允许项目目录和 .gitignore 自身，其余全部忽略
 /*
 !/.gitignore
 !/matchmate-mobile/
-!/matchmate-client/
 !/matchmate-server/
 
-# IntelliJ IDEA
 .idea/
 *.iml
 *.iws
 *.ipr
 
-# OS
 .DS_Store
 Thumbs.db
