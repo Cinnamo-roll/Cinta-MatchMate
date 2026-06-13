@@ -83,7 +83,7 @@ public class User {
     private Integer userRole;
 
     /**
-     * 累计积分。
+     * 赢得金额。
      */
     private Integer totalScore;
 

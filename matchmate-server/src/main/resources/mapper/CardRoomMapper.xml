@@ -93,24 +93,6 @@
         </foreach>
     </delete>
 
-    <delete id="deleteExpenseParticipantsByRoomIds">
-        DELETE participant
-        FROM cardExpenseParticipant participant
-        JOIN cardExpense expense ON expense.id = participant.expenseId
-        WHERE expense.roomId IN
-        <foreach collection="roomIds" item="roomId" open="(" close=")" separator=",">
-            #{roomId}
-        </foreach>
-    </delete>
-
-    <delete id="deleteExpensesByRoomIds">
-        DELETE FROM cardExpense
-        WHERE roomId IN
-        <foreach collection="roomIds" item="roomId" open="(" close=")" separator=",">
-            #{roomId}
-        </foreach>
-    </delete>
-
     <delete id="deleteRoundScoresByRoomIds">
         DELETE score
         FROM cardRoundScore score

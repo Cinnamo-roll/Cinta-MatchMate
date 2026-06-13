@@ -50,8 +50,6 @@ public class DataRetentionService {
 
         cardRoomMapper.deleteFundParticipantsByRoomIds(roomIds);
         cardRoomMapper.deleteFundsByRoomIds(roomIds);
-        cardRoomMapper.deleteExpenseParticipantsByRoomIds(roomIds);
-        cardRoomMapper.deleteExpensesByRoomIds(roomIds);
         cardRoomMapper.deleteRoundScoresByRoomIds(roomIds);
         cardRoomMapper.deleteRoundsByRoomIds(roomIds);
         cardRoomMapper.deleteMembersByRoomIds(roomIds);

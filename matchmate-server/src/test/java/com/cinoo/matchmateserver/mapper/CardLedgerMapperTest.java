@@ -51,12 +51,6 @@ class CardLedgerMapperTest {
     private CardRoundScoreMapper cardRoundScoreMapper;
 
     @Autowired
-    private CardExpenseMapper cardExpenseMapper;
-
-    @Autowired
-    private CardExpenseParticipantMapper cardExpenseParticipantMapper;
-
-    @Autowired
     private CardFundRecordMapper cardFundRecordMapper;
 
     @Autowired
@@ -278,63 +272,6 @@ class CardLedgerMapperTest {
                 cardRoundScoreMapper.insertBatch(dupScores));
     }
 
-    // ── 费用 + 分摊 ──
-
-    @Test
-    void createExpense_shouldPersistWithParticipants() {
-        CardRoom room = createRoom("999999", testUser1.getId());
-        joinRoom(room.getId(), testUser1.getId());
-        joinRoom(room.getId(), testUser2.getId());
-
-        CardExpense expense = createExpense(room.getId(), CardConstant.EXPENSE_TYPE_TEA, 1500, testUser1.getId());
-
-        assertNotNull(expense.getId());
-        assertEquals(CardConstant.EXPENSE_TYPE_TEA, expense.getType());
-        assertEquals(1500, expense.getAmount());
-
-        // 分摊
-        List<CardExpenseParticipant> participants = new ArrayList<>();
-        CardExpenseParticipant p1 = new CardExpenseParticipant();
-        p1.setExpenseId(expense.getId());
-        p1.setUserId(testUser1.getId());
-        participants.add(p1);
-
-        CardExpenseParticipant p2 = new CardExpenseParticipant();
-        p2.setExpenseId(expense.getId());
-        p2.setUserId(testUser2.getId());
-        participants.add(p2);
-
-        int inserted = cardExpenseParticipantMapper.insertBatch(participants);
-        assertEquals(2, inserted);
-
-        List<CardExpenseParticipant> loaded =
-                cardExpenseParticipantMapper.selectByExpenseId(expense.getId());
-        assertEquals(2, loaded.size());
-    }
-
-    @Test
-    void createExpenseParticipant_duplicateUser_shouldFail() {
-        CardRoom room = createRoom("000001", testUser1.getId());
-        joinRoom(room.getId(), testUser1.getId());
-        CardExpense expense = createExpense(room.getId(), CardConstant.EXPENSE_TYPE_MEAL, 2000, testUser1.getId());
-
-        List<CardExpenseParticipant> participants = new ArrayList<>();
-        CardExpenseParticipant p = new CardExpenseParticipant();
-        p.setExpenseId(expense.getId());
-        p.setUserId(testUser1.getId());
-        participants.add(p);
-        cardExpenseParticipantMapper.insertBatch(participants);
-
-        // 重复
-        List<CardExpenseParticipant> dup = new ArrayList<>();
-        CardExpenseParticipant d = new CardExpenseParticipant();
-        d.setExpenseId(expense.getId());
-        d.setUserId(testUser1.getId());
-        dup.add(d);
-        assertThrows(DuplicateKeyException.class, () ->
-                cardExpenseParticipantMapper.insertBatch(dup));
-    }
-
     // ── 成员积分更新 ──
 
     @Test
@@ -489,13 +426,4 @@ class CardLedgerMapperTest {
         return round;
     }
 
-    private CardExpense createExpense(Long roomId, int type, int amount, Long payerId) {
-        CardExpense expense = new CardExpense();
-        expense.setRoomId(roomId);
-        expense.setType(type);
-        expense.setAmount(amount);
-        expense.setPayerId(payerId);
-        cardExpenseMapper.insert(expense);
-        return expense;
-    }
 }

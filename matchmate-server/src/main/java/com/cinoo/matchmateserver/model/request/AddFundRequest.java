@@ -11,13 +11,12 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * 新增平摊资金请求。不计入排行榜积分。
+ * 新增资金平摊请求。
  */
 @Data
 public class AddFundRequest {
 
-    /** 类型：1-加钱 2-扣钱 */
-    @NotNull(message = "类型不能为空")
+    /** 兼容旧客户端：1-发起人先付；不传时默认 1 */
     private Integer type;
 
     /** 金额（元），仅允许 1 到 999999 的正整数 */

@@ -10,7 +10,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * 新增转账牌局请求。当前用户向其他成员转账，总分必须为0。
+ * 新增收支记录请求。当前用户向其他成员转账，金额合计必须为0。
  */
 @Data
 public class AddTransferRequest {

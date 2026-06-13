@@ -25,6 +25,15 @@
         WHERE id = #{memberId}
     </update>
 
+    <update id="reactivate">
+        UPDATE cardRoomMember
+        SET status = 0,
+            joinTime = NOW(),
+            leaveTime = NULL
+        WHERE id = #{memberId}
+          AND status = 1
+    </update>
+
     <update id="batchSettle">
         UPDATE cardRoomMember
         <trim prefix="SET" suffixOverrides=",">

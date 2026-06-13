@@ -34,7 +34,6 @@ public class CardWebSocketHandler extends TextWebSocketHandler {
     public static final String EVENT_MEMBER_JOINED = "card_room_member_joined";
     public static final String EVENT_MEMBER_LEFT   = "card_room_member_left";
     public static final String EVENT_ROUND_CREATED = "card_room_round_created";
-    public static final String EVENT_EXPENSE_CREATED = "card_room_expense_created";
     public static final String EVENT_FUND_CREATED = "card_room_fund_created";
     public static final String EVENT_ROOM_CLOSED   = "card_room_closed";
 

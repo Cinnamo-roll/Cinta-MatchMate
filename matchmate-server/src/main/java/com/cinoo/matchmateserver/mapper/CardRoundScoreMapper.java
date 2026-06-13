@@ -17,9 +17,11 @@ public interface CardRoundScoreMapper extends BaseMapper<CardRoundScore> {
     List<CardRoundScore> selectByRoundId(@Param("roundId") Long roundId);
 
     /**
-     * 批量查询多局的积分明细。
+     * 批量查询多局的金额明细。
      */
     List<CardRoundScore> selectByRoundIds(@Param("roundIds") List<Long> roundIds);
+
+    int deleteByRoundId(@Param("roundId") Long roundId);
 
     /**
      * 批量插入。

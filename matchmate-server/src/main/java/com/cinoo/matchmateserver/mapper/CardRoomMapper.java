@@ -35,10 +35,6 @@ public interface CardRoomMapper extends BaseMapper<CardRoom> {
 
     int deleteFundsByRoomIds(@Param("roomIds") List<Long> roomIds);
 
-    int deleteExpenseParticipantsByRoomIds(@Param("roomIds") List<Long> roomIds);
-
-    int deleteExpensesByRoomIds(@Param("roomIds") List<Long> roomIds);
-
     int deleteRoundScoresByRoomIds(@Param("roomIds") List<Long> roomIds);
 
     int deleteRoundsByRoomIds(@Param("roomIds") List<Long> roomIds);

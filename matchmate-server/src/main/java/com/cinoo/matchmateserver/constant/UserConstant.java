@@ -17,4 +17,6 @@ public final class UserConstant {
     public static final int NORMAL_STATUS = 0;
 
     public static final int BANNED_STATUS = 1;
+
+    public static final int DEFAULT_GENDER = 1;
 }

@@ -6,11 +6,11 @@ import com.cinoo.matchmateserver.constant.CardConstant;
 import com.cinoo.matchmateserver.exception.BusinessException;
 import com.cinoo.matchmateserver.mapper.*;
 import com.cinoo.matchmateserver.model.domain.*;
-import com.cinoo.matchmateserver.model.request.AddExpenseRequest;
 import com.cinoo.matchmateserver.model.request.AddFundRequest;
 import com.cinoo.matchmateserver.model.request.AddTransferRequest;
 import com.cinoo.matchmateserver.model.vo.CardRoomVO;
 import com.cinoo.matchmateserver.model.vo.UserVO;
+import com.cinoo.matchmateserver.service.assembler.CardRoomViewAssembler;
 import com.cinoo.matchmateserver.service.impl.CardRoomServiceImpl;
 import com.cinoo.matchmateserver.websocket.CardWebSocketHandler;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,10 +42,10 @@ class CardRoomServiceTest {
     @Mock private CardRoomMemberMapper cardRoomMemberMapper;
     @Mock private CardRoundMapper cardRoundMapper;
     @Mock private CardRoundScoreMapper cardRoundScoreMapper;
-    @Mock private CardExpenseMapper cardExpenseMapper;
-    @Mock private CardExpenseParticipantMapper cardExpenseParticipantMapper;
     @Mock private CardFundRecordMapper cardFundRecordMapper;
     @Mock private CardFundParticipantMapper cardFundParticipantMapper;
+    @Mock private CardUndoRequestMapper cardUndoRequestMapper;
+    @Mock private CardUndoApprovalMapper cardUndoApprovalMapper;
     @Mock private UserMapper userMapper;
     @Mock private UserService userService;
     @Mock private DataRetentionService dataRetentionService;
@@ -60,12 +60,23 @@ class CardRoomServiceTest {
 
     @BeforeEach
     void setUp() throws InterruptedException {
+        CardRoomViewAssembler cardRoomViewAssembler = new CardRoomViewAssembler(
+                cardRoomMemberMapper,
+                cardRoundMapper,
+                cardRoundScoreMapper,
+                cardFundRecordMapper,
+                cardFundParticipantMapper,
+                cardUndoRequestMapper,
+                cardUndoApprovalMapper,
+                userMapper
+        );
         cardRoomService = new CardRoomServiceImpl(
                 cardRoomMapper, cardRoomMemberMapper, cardRoundMapper,
-                cardRoundScoreMapper, cardExpenseMapper, cardExpenseParticipantMapper,
+                cardRoundScoreMapper,
                 cardFundRecordMapper, cardFundParticipantMapper,
+                cardUndoRequestMapper, cardUndoApprovalMapper,
                 userMapper, userService, dataRetentionService, cacheInvalidationService,
-                redissonClient, cardWebSocketHandler
+                cardRoomViewAssembler, redissonClient, cardWebSocketHandler
         );
 
         User owner = new User();
@@ -189,6 +200,35 @@ class CardRoomServiceTest {
     }
 
     // ── 退出房间 ──
+
+    @Test
+    void joinRoom_leftMember_shouldReactivate() {
+        CardRoom room = new CardRoom();
+        room.setId(1L);
+        room.setStatus(CardConstant.ROOM_STATUS_ACTIVE);
+        room.setMaxMembers(8);
+
+        CardRoomMember leftMember = makeMember(room.getId(), OTHER_ID, 7);
+        leftMember.setId(21L);
+        leftMember.setStatus(CardConstant.MEMBER_STATUS_LEFT);
+        leftMember.setLeaveTime(new java.util.Date());
+
+        when(cardRoomMapper.selectOne(any())).thenReturn(room);
+        when(cardRoomMapper.selectById(room.getId())).thenReturn(room);
+        when(cardRoomMapper.selectActiveRoomByUserId(OTHER_ID)).thenReturn(null);
+        when(cardRoomMemberMapper.selectOne(any())).thenReturn(leftMember);
+        when(cardRoomMemberMapper.selectCount(any())).thenReturn(1L);
+        when(cardRoomMemberMapper.reactivate(leftMember.getId())).thenReturn(1);
+        configureRoomView(room, List.of(leftMember));
+
+        CardRoomVO vo = cardRoomService.joinRoom("123456", otherRequest);
+
+        assertNotNull(vo);
+        assertEquals(CardConstant.MEMBER_STATUS_ACTIVE, leftMember.getStatus());
+        assertNull(leftMember.getLeaveTime());
+        verify(cardRoomMemberMapper).reactivate(leftMember.getId());
+        verify(cardRoomMemberMapper, never()).insert(any(CardRoomMember.class));
+    }
 
     @Test
     void leaveRoom_ownerOfActive_shouldThrow() {
@@ -346,7 +386,7 @@ class CardRoomServiceTest {
         CardRoomVO result = cardRoomService.addFund(room.getId(), request, ownerRequest);
 
         assertEquals(100, savedFund.get().getAmount());
-        assertEquals(100, result.getFundBalance());
+        assertEquals(50, result.getFundBalance());
         verify(cardWebSocketHandler).pushEvent(
                 eq(room.getId()),
                 eq(OWNER_ID),
@@ -354,85 +394,44 @@ class CardRoomServiceTest {
                 any());
     }
 
-    // ── 新增费用 ──
-
     @Test
-    void addExpense_notOwner_shouldThrow() {
+    void requestRoundUndo_notCreator_shouldThrow() {
         CardRoom room = mockActiveRoom();
-        AddExpenseRequest req = makeExpenseRequest(1, 1000, List.of(OTHER_ID));
-
-        assertThrows(BusinessException.class,
-                () -> cardRoomService.addExpense(room.getId(), req, otherRequest));
-    }
-
-    @Test
-    void addExpense_invalidParticipant_shouldThrow() {
-        CardRoom room = mockActiveRoom();
-        AddExpenseRequest req = makeExpenseRequest(1, 1000, List.of(999L)); // 非成员
-
-        lenient().when(cardRoomMemberMapper.selectActiveByRoomId(room.getId())).thenReturn(
-                List.of(makeMember(room.getId(), OWNER_ID, 0))
-        );
-
-        assertThrows(BusinessException.class,
-                () -> cardRoomService.addExpense(room.getId(), req, ownerRequest));
-    }
-
-    @Test
-    void addExpense_shouldKeepScoreSumZeroWhenAmountHasRemainder() {
-        CardRoom room = mockActiveRoom();
-        AddExpenseRequest req = makeExpenseRequest(
-                CardConstant.EXPENSE_TYPE_TEA,
-                100,
-                List.of(OWNER_ID, OTHER_ID, OTHER2_ID)
-        );
-        CardRoomMember owner = makeMember(room.getId(), OWNER_ID, 0);
-        owner.setId(11L);
         CardRoomMember other = makeMember(room.getId(), OTHER_ID, 0);
-        other.setId(12L);
-        CardRoomMember other2 = makeMember(room.getId(), OTHER2_ID, 0);
-        other2.setId(13L);
+        CardRound round = new CardRound();
+        round.setId(30L);
+        round.setRoomId(room.getId());
+        round.setCreatorId(OWNER_ID);
 
-        when(cardRoomMapper.selectActiveMemberIds(room.getId()))
-                .thenReturn(List.of(OWNER_ID, OTHER_ID, OTHER2_ID));
-        when(cardRoomMemberMapper.selectOne(any()))
-                .thenReturn(owner, other, other2);
-        when(cardExpenseMapper.insert(any(CardExpense.class))).thenAnswer(invocation -> {
-            CardExpense expense = invocation.getArgument(0);
-            expense.setId(30L);
-            return 1;
-        });
-        when(cardExpenseMapper.selectByRoomId(eq(room.getId()), anyInt()))
-                .thenAnswer(invocation -> {
-                    CardExpense expense = new CardExpense();
-                    expense.setId(30L);
-                    expense.setRoomId(room.getId());
-                    expense.setType(CardConstant.EXPENSE_TYPE_TEA);
-                    expense.setAmount(100);
-                    expense.setPayerId(OWNER_ID);
-                    return List.of(expense);
-                });
+        when(cardRoomMemberMapper.selectOne(any())).thenReturn(other);
+        when(cardRoundMapper.selectById(round.getId())).thenReturn(round);
 
-        cardRoomService.addExpense(room.getId(), req, ownerRequest);
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> cardRoomService.requestRoundUndo(room.getId(), round.getId(), otherRequest));
 
-        verify(cardRoomMemberMapper).updateScoreIncrement(11L, 66);
-        verify(cardRoomMemberMapper).updateScoreIncrement(12L, -33);
-        verify(cardRoomMemberMapper).updateScoreIncrement(13L, -33);
+        assertEquals(ErrorCode.NO_AUTH.getCode(), exception.getCode());
+        verify(cardUndoRequestMapper, never()).insert(any(CardUndoRequest.class));
     }
 
     @Test
-    void addExpense_duplicateParticipant_shouldThrow() {
+    void requestFundUndo_notCreator_shouldThrow() {
         CardRoom room = mockActiveRoom();
-        AddExpenseRequest req = makeExpenseRequest(
-                CardConstant.EXPENSE_TYPE_TEA,
-                100,
-                List.of(OWNER_ID, OWNER_ID)
-        );
+        CardRoomMember other = makeMember(room.getId(), OTHER_ID, 0);
+        CardFundRecord fund = new CardFundRecord();
+        fund.setId(40L);
+        fund.setRoomId(room.getId());
+        fund.setCreatorId(OWNER_ID);
 
-        BusinessException ex = assertThrows(BusinessException.class,
-                () -> cardRoomService.addExpense(room.getId(), req, ownerRequest));
+        when(cardRoomMemberMapper.selectOne(any())).thenReturn(other);
+        when(cardFundRecordMapper.selectById(fund.getId())).thenReturn(fund);
 
-        assertEquals(ErrorCode.PARAM_ERROR.getCode(), ex.getCode());
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> cardRoomService.requestFundUndo(room.getId(), fund.getId(), otherRequest));
+
+        assertEquals(ErrorCode.NO_AUTH.getCode(), exception.getCode());
+        verify(cardUndoRequestMapper, never()).insert(any(CardUndoRequest.class));
     }
 
     // ── 结束房间 ──
@@ -467,9 +466,6 @@ class CardRoomServiceTest {
         members.add(m2);
         when(cardRoomMemberMapper.selectActiveByRoomId(room.getId())).thenReturn(members);
 
-        // No expenses
-        when(cardExpenseMapper.selectByRoomId(room.getId(), 200)).thenReturn(List.of());
-
         // Mapper updates
         when(cardRoomMapper.updateById(any(CardRoom.class))).thenReturn(1);
         when(cardRoomMemberMapper.batchSettle(anyList())).thenReturn(1);
@@ -494,8 +490,6 @@ class CardRoomServiceTest {
         room.setOwnerId(OWNER_ID);
         room.setStatus(CardConstant.ROOM_STATUS_ACTIVE);
         room.setMaxMembers(8);
-        room.setTeaAmount(0);
-        room.setMealAmount(0);
         when(cardRoomMapper.selectById(room.getId())).thenReturn(room);
         return room;
     }
@@ -510,14 +504,6 @@ class CardRoomServiceTest {
         return room;
     }
 
-    private AddExpenseRequest makeExpenseRequest(int type, int amount, List<Long> participantIds) {
-        AddExpenseRequest req = new AddExpenseRequest();
-        req.setType(type);
-        req.setAmount(amount);
-        req.setParticipantIds(participantIds);
-        return req;
-    }
-
     private AddTransferRequest makeTransferRequest(Long toUserId, String amount) {
         AddTransferRequest.TransferEntry transfer = new AddTransferRequest.TransferEntry();
         transfer.setToUserId(toUserId);
@@ -529,7 +515,6 @@ class CardRoomServiceTest {
 
     private void configureRoomView(CardRoom room, List<CardRoomMember> members) {
         when(cardRoomMemberMapper.selectByRoomId(room.getId())).thenReturn(members);
-        when(cardExpenseMapper.selectByRoomId(eq(room.getId()), anyInt())).thenReturn(List.of());
         when(userMapper.selectBatchIds(anyCollection())).thenAnswer(invocation -> {
             List<User> users = new ArrayList<>();
             for (CardRoomMember member : members) {

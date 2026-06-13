@@ -1,6 +1,5 @@
 package com.cinoo.matchmateserver.service;
 
-import com.cinoo.matchmateserver.model.request.AddExpenseRequest;
 import com.cinoo.matchmateserver.model.request.AddFundRequest;
 import com.cinoo.matchmateserver.model.request.AddTransferRequest;
 import com.cinoo.matchmateserver.model.vo.CardRoomHistoryVO;
@@ -41,7 +40,7 @@ public interface CardRoomService {
     List<CardRoomHistoryVO> getHistory(int limit, HttpServletRequest request);
 
     /**
-     * 查询当前用户与共同牌友的积分排名。
+     * 查询当前用户与共同牌友的排名。
      */
     List<UserVO> getRanking(int limit, HttpServletRequest request);
 
@@ -51,22 +50,23 @@ public interface CardRoomService {
     void leaveRoom(Long roomId, HttpServletRequest request);
 
     /**
-     * 成员发起转账牌局。当前用户向其他成员转账，总分必须为0。
+     * 成员记一笔收支。当前用户向其他成员转账，金额合计必须为0。
      */
     CardRoomVO addTransfer(Long roomId, AddTransferRequest req, HttpServletRequest request);
 
     /**
-     * 成员发起平摊资金（加钱/扣钱）。不计入积分。
+     * 成员发起资金平摊。
      */
     CardRoomVO addFund(Long roomId, AddFundRequest req, HttpServletRequest request);
-
-    /**
-     * 房主新增费用（茶/饭）。
-     */
-    CardRoomVO addExpense(Long roomId, AddExpenseRequest req, HttpServletRequest request);
 
     /**
      * 房主结束房间并结算。
      */
     CardRoomVO endRoom(Long roomId, HttpServletRequest request);
+
+    CardRoomVO requestRoundUndo(Long roomId, Long roundId, HttpServletRequest request);
+
+    CardRoomVO requestFundUndo(Long roomId, Long fundId, HttpServletRequest request);
+
+    CardRoomVO approveUndo(Long roomId, Long undoRequestId, HttpServletRequest request);
 }

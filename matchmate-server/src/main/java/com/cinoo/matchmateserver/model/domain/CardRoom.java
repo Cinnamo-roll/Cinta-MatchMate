@@ -26,10 +26,6 @@ public class CardRoom {
 
     private Integer maxMembers;
 
-    private Integer teaAmount;
-
-    private Integer mealAmount;
-
     private Date settleTime;
 
     private Date createTime;

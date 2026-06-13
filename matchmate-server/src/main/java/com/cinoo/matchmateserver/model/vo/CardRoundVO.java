@@ -19,6 +19,7 @@ public class CardRoundVO implements Serializable {
     private Long creatorId;
     private Date createTime;
     private List<ScoreEntry> scores;
+    private CardUndoStatusVO undoStatus;
 
     @Data
     public static class ScoreEntry {

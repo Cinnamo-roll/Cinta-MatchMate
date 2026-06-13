@@ -26,6 +26,8 @@ public interface CardRoomMemberMapper extends BaseMapper<CardRoomMember> {
      */
     int updateScoreIncrement(@Param("memberId") Long memberId, @Param("delta") int delta);
 
+    int reactivate(@Param("memberId") Long memberId);
+
     /**
      * 批量更新 status 和 settleScore。
      */

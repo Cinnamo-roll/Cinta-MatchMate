@@ -57,8 +57,6 @@ class DataRetentionServiceTest {
         InOrder order = inOrder(cardRoomMapper);
         order.verify(cardRoomMapper).deleteFundParticipantsByRoomIds(roomIds);
         order.verify(cardRoomMapper).deleteFundsByRoomIds(roomIds);
-        order.verify(cardRoomMapper).deleteExpenseParticipantsByRoomIds(roomIds);
-        order.verify(cardRoomMapper).deleteExpensesByRoomIds(roomIds);
         order.verify(cardRoomMapper).deleteRoundScoresByRoomIds(roomIds);
         order.verify(cardRoomMapper).deleteRoundsByRoomIds(roomIds);
         order.verify(cardRoomMapper).deleteMembersByRoomIds(roomIds);

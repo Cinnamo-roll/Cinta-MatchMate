@@ -7,14 +7,15 @@ import com.cinoo.matchmateserver.constant.CardConstant;
 import com.cinoo.matchmateserver.exception.BusinessException;
 import com.cinoo.matchmateserver.mapper.*;
 import com.cinoo.matchmateserver.model.domain.*;
-import com.cinoo.matchmateserver.model.request.AddExpenseRequest;
 import com.cinoo.matchmateserver.model.request.AddFundRequest;
 import com.cinoo.matchmateserver.model.request.AddRoundRequest;
 import com.cinoo.matchmateserver.model.request.AddTransferRequest;
 import com.cinoo.matchmateserver.model.vo.*;
+import com.cinoo.matchmateserver.service.assembler.CardRoomViewAssembler;
 import com.cinoo.matchmateserver.service.CardRoomService;
 import com.cinoo.matchmateserver.service.DataRetentionService;
 import com.cinoo.matchmateserver.service.UserService;
+import com.cinoo.matchmateserver.service.support.CardLedgerParticipantUtils;
 import com.cinoo.matchmateserver.websocket.CardWebSocketHandler;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -29,8 +30,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -41,18 +40,18 @@ public class CardRoomServiceImpl implements CardRoomService {
     private final CardRoomMemberMapper cardRoomMemberMapper;
     private final CardRoundMapper cardRoundMapper;
     private final CardRoundScoreMapper cardRoundScoreMapper;
-    private final CardExpenseMapper cardExpenseMapper;
-    private final CardExpenseParticipantMapper cardExpenseParticipantMapper;
     private final CardFundRecordMapper cardFundRecordMapper;
     private final CardFundParticipantMapper cardFundParticipantMapper;
+    private final CardUndoRequestMapper cardUndoRequestMapper;
+    private final CardUndoApprovalMapper cardUndoApprovalMapper;
     private final UserMapper userMapper;
     private final UserService userService;
     private final DataRetentionService dataRetentionService;
     private final CacheInvalidationService cacheInvalidationService;
+    private final CardRoomViewAssembler cardRoomViewAssembler;
     private final RedissonClient redissonClient;
     private final CardWebSocketHandler cardWebSocketHandler;
 
-    private static final int RECENT_LIMIT = 20;
     private static final int MAX_OVERVIEW_LIMIT = 20;
     private static final Random RANDOM = new Random();
 
@@ -109,209 +108,6 @@ public class CardRoomServiceImpl implements CardRoomService {
         throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成房间号失败，请重试");
     }
 
-    private CardRoomVO toRoomVO(CardRoom room, Long currentUserId) {
-        List<CardRoomMember> members = cardRoomMemberMapper.selectByRoomId(room.getId());
-        List<CardRound> rounds = cardRoundMapper.selectByRoomId(room.getId(), RECENT_LIMIT);
-        List<CardExpense> expenses = cardExpenseMapper.selectByRoomId(room.getId(), RECENT_LIMIT);
-        // fund tables may not exist yet; degrade gracefully
-        List<CardFundRecord> funds;
-        List<CardFundParticipant> fundParticipants;
-        try {
-            funds = cardFundRecordMapper.selectByRoomId(room.getId(), RECENT_LIMIT);
-            fundParticipants = funds.isEmpty()
-                    ? List.of()
-                    : cardFundParticipantMapper.selectByFundIds(
-                            funds.stream().map(CardFundRecord::getId).toList());
-        } catch (Exception e) {
-            log.warn("Fund tables not available for room {}: {}", room.getId(), e.getMessage());
-            funds = List.of();
-            fundParticipants = List.of();
-        }
-
-        List<CardRoundScore> scores = rounds.isEmpty()
-                ? List.of()
-                : cardRoundScoreMapper.selectByRoundIds(
-                        rounds.stream().map(CardRound::getId).toList());
-        List<CardExpenseParticipant> participants = expenses.isEmpty()
-                ? List.of()
-                : cardExpenseParticipantMapper.selectByExpenseIds(
-                        expenses.stream().map(CardExpense::getId).toList());
-
-        Set<Long> userIds = new HashSet<>();
-        userIds.add(room.getOwnerId());
-        members.forEach(member -> userIds.add(member.getUserId()));
-        scores.forEach(score -> userIds.add(score.getUserId()));
-        expenses.forEach(expense -> userIds.add(expense.getPayerId()));
-        participants.forEach(participant -> userIds.add(participant.getUserId()));
-        funds.forEach(fund -> userIds.add(fund.getCreatorId()));
-        fundParticipants.forEach(fp -> userIds.add(fp.getUserId()));
-        Map<Long, User> usersById = userIds.isEmpty()
-                ? Map.of()
-                : userMapper.selectBatchIds(userIds).stream()
-                        .collect(Collectors.toMap(User::getId, Function.identity()));
-
-        Map<Long, List<CardRoundScore>> scoresByRoundId = scores.stream()
-                .collect(Collectors.groupingBy(CardRoundScore::getRoundId));
-        Map<Long, List<CardExpenseParticipant>> participantsByExpenseId = participants.stream()
-                .collect(Collectors.groupingBy(CardExpenseParticipant::getExpenseId));
-        Map<Long, List<CardFundParticipant>> fundParticipantsByFundId = fundParticipants.stream()
-                .collect(Collectors.groupingBy(CardFundParticipant::getFundId));
-
-        CardRoomVO vo = new CardRoomVO();
-        vo.setRoomId(room.getId());
-        vo.setRoomCode(room.getRoomCode());
-        vo.setOwnerId(room.getOwnerId());
-        vo.setStatus(room.getStatus());
-        vo.setMaxMembers(room.getMaxMembers());
-        vo.setTeaAmount(room.getTeaAmount());
-        vo.setMealAmount(room.getMealAmount());
-        vo.setSettleTime(room.getSettleTime());
-        vo.setCreateTime(room.getCreateTime());
-
-        User owner = usersById.get(room.getOwnerId());
-        vo.setOwnerName(owner != null ? owner.getUsername() : null);
-
-        List<CardRoomMemberVO> memberVOs = new ArrayList<>();
-        for (CardRoomMember m : members) {
-            User u = usersById.get(m.getUserId());
-            CardRoomMemberVO mv = new CardRoomMemberVO();
-            mv.setUserId(m.getUserId());
-            mv.setUsername(u != null ? u.getUsername() : null);
-            mv.setAvatarUrl(u != null ? u.getAvatarUrl() : null);
-            mv.setTotalScore(m.getTotalScore());
-            mv.setStatus(m.getStatus());
-            mv.setWins(m.getWins());
-            mv.setLosses(m.getLosses());
-            mv.setJoinTime(m.getJoinTime());
-            memberVOs.add(mv);
-        }
-        vo.setMembers(memberVOs);
-
-        vo.setRecentRounds(rounds.stream()
-                .map(round -> toRoundVO(
-                        round,
-                        scoresByRoundId.getOrDefault(round.getId(), List.of()),
-                        usersById))
-                .toList());
-        vo.setRecentExpenses(expenses.stream()
-                .map(expense -> toExpenseVO(
-                        expense,
-                        participantsByExpenseId.getOrDefault(expense.getId(), List.of()),
-                        usersById))
-                .toList());
-        vo.setRecentFunds(funds.stream()
-                .map(fund -> toFundRecordVO(
-                        fund,
-                        fundParticipantsByFundId.getOrDefault(fund.getId(), List.of()),
-                        usersById))
-                .toList());
-
-        // 计算当前用户在该房间的平摊资金余额
-        int balance = 0;
-        for (CardFundRecord fund : funds) {
-            List<CardFundParticipant> fps = fundParticipantsByFundId.getOrDefault(fund.getId(), List.of());
-            int shareCount = fps.size();
-            if (shareCount == 0) continue;
-            if (fund.getCreatorId().equals(currentUserId)) {
-                balance += fund.getType() == CardConstant.FUND_TYPE_ADD
-                        ? fund.getAmount()
-                        : -fund.getAmount();
-            }
-            int sharePerPerson = fund.getAmount() / shareCount;
-            int remainder = fund.getAmount() % shareCount;
-            int idx = 0;
-            for (CardFundParticipant fp : fps) {
-                int charge = sharePerPerson + (idx < remainder ? 1 : 0);
-                if (fp.getUserId().equals(currentUserId)) {
-                    balance += fund.getType() == CardConstant.FUND_TYPE_ADD
-                            ? -charge
-                            : charge;
-                }
-                idx++;
-            }
-        }
-        vo.setFundBalance(balance);
-
-        return vo;
-    }
-
-    private CardRoundVO toRoundVO(
-            CardRound round,
-            List<CardRoundScore> scores,
-            Map<Long, User> usersById) {
-        CardRoundVO vo = new CardRoundVO();
-        vo.setRoundId(round.getId());
-        vo.setRoundNo(round.getRoundNo());
-        vo.setCreatorId(round.getCreatorId());
-        vo.setCreateTime(round.getCreateTime());
-
-        List<CardRoundVO.ScoreEntry> entries = new ArrayList<>();
-        for (CardRoundScore s : scores) {
-            User u = usersById.get(s.getUserId());
-            CardRoundVO.ScoreEntry e = new CardRoundVO.ScoreEntry();
-            e.setUserId(s.getUserId());
-            e.setUsername(u != null ? u.getUsername() : null);
-            e.setScore(s.getScore());
-            entries.add(e);
-        }
-        vo.setScores(entries);
-        return vo;
-    }
-
-    private CardExpenseVO toExpenseVO(
-            CardExpense expense,
-            List<CardExpenseParticipant> participants,
-            Map<Long, User> usersById) {
-        CardExpenseVO vo = new CardExpenseVO();
-        vo.setExpenseId(expense.getId());
-        vo.setType(expense.getType());
-        vo.setAmount(expense.getAmount());
-        vo.setPayerId(expense.getPayerId());
-        vo.setCreateTime(expense.getCreateTime());
-
-        User payer = usersById.get(expense.getPayerId());
-        vo.setPayerName(payer != null ? payer.getUsername() : null);
-
-        List<CardExpenseVO.Participant> ptps = new ArrayList<>();
-        for (CardExpenseParticipant p : participants) {
-            User u = usersById.get(p.getUserId());
-            CardExpenseVO.Participant pt = new CardExpenseVO.Participant();
-            pt.setUserId(p.getUserId());
-            pt.setUsername(u != null ? u.getUsername() : null);
-            ptps.add(pt);
-        }
-        vo.setParticipants(ptps);
-        return vo;
-    }
-
-    private CardFundRecordVO toFundRecordVO(
-            CardFundRecord fund,
-            List<CardFundParticipant> participants,
-            Map<Long, User> usersById) {
-        CardFundRecordVO vo = new CardFundRecordVO();
-        vo.setFundId(fund.getId());
-        vo.setType(fund.getType());
-        vo.setAmount(fund.getAmount());
-        vo.setCreatorId(fund.getCreatorId());
-        vo.setCreateTime(fund.getCreateTime());
-
-        User creator = usersById.get(fund.getCreatorId());
-        vo.setCreatorName(creator != null ? creator.getUsername() : null);
-
-        List<CardFundRecordVO.Participant> ptps = new ArrayList<>();
-        for (CardFundParticipant p : participants) {
-            User u = usersById.get(p.getUserId());
-            CardFundRecordVO.Participant pt = new CardFundRecordVO.Participant();
-            pt.setUserId(p.getUserId());
-            pt.setUsername(u != null ? u.getUsername() : null);
-            ptps.add(pt);
-        }
-        vo.setParticipants(ptps);
-        return vo;
-    }
-
-    // ── 业务方法 ──
-
     @Override
     @Transactional
     public CardRoomVO createRoom(HttpServletRequest request) {
@@ -331,7 +127,7 @@ public class CardRoomServiceImpl implements CardRoomService {
         member.setStatus(CardConstant.MEMBER_STATUS_ACTIVE);
         cardRoomMemberMapper.insert(member);
 
-        return toRoomVO(room, user.getId());
+        return cardRoomViewAssembler.toRoomVO(room, user.getId());
     }
 
     @Override
@@ -369,7 +165,28 @@ public class CardRoomServiceImpl implements CardRoomService {
                             .eq(CardRoomMember::getUserId, user.getId()));
             if (member != null) {
                 if (member.getStatus() == CardConstant.MEMBER_STATUS_ACTIVE) {
-                    return toRoomVO(room, user.getId());
+                    return cardRoomViewAssembler.toRoomVO(room, user.getId());
+                }
+                if (member.getStatus() == CardConstant.MEMBER_STATUS_LEFT) {
+                    long activeCount = cardRoomMemberMapper.selectCount(
+                            new LambdaQueryWrapper<CardRoomMember>()
+                                    .eq(CardRoomMember::getRoomId, room.getId())
+                                    .eq(CardRoomMember::getStatus, CardConstant.MEMBER_STATUS_ACTIVE));
+                    if (activeCount >= room.getMaxMembers()) {
+                        throw new BusinessException(ErrorCode.ROOM_FULL);
+                    }
+                    int updated = cardRoomMemberMapper.reactivate(member.getId());
+                    if (updated != 1) {
+                        throw new BusinessException(ErrorCode.SYSTEM_ERROR, "重新加入房间失败");
+                    }
+                    member.setStatus(CardConstant.MEMBER_STATUS_ACTIVE);
+                    member.setJoinTime(new Date());
+                    member.setLeaveTime(null);
+
+                    CardRoomVO vo = cardRoomViewAssembler.toRoomVO(room, user.getId());
+                    UserVO uvo = userService.toUserVO(user);
+                    pushAfterCommit(room.getId(), user.getId(), CardWebSocketHandler.EVENT_MEMBER_JOINED, uvo);
+                    return vo;
                 }
                 throw new BusinessException(
                         ErrorCode.ROOM_ALREADY_SETTLED,
@@ -390,7 +207,7 @@ public class CardRoomServiceImpl implements CardRoomService {
             member.setStatus(CardConstant.MEMBER_STATUS_ACTIVE);
             cardRoomMemberMapper.insert(member);
 
-            CardRoomVO vo = toRoomVO(room, user.getId());
+            CardRoomVO vo = cardRoomViewAssembler.toRoomVO(room, user.getId());
             UserVO uvo = userService.toUserVO(user);
             pushAfterCommit(room.getId(), user.getId(), CardWebSocketHandler.EVENT_MEMBER_JOINED, uvo);
             return vo;
@@ -407,7 +224,7 @@ public class CardRoomServiceImpl implements CardRoomService {
         User user = loginUser(request);
         CardRoom room = requireRoom(roomId);
         requireAnyMember(roomId, user.getId());
-        return toRoomVO(room, user.getId());
+        return cardRoomViewAssembler.toRoomVO(room, user.getId());
     }
 
     @Override
@@ -415,7 +232,7 @@ public class CardRoomServiceImpl implements CardRoomService {
         User user = loginUser(request);
         CardRoom room = cardRoomMapper.selectActiveRoomByUserId(user.getId());
         if (room == null) return null;
-        return toRoomVO(room, user.getId());
+        return cardRoomViewAssembler.toRoomVO(room, user.getId());
     }
 
     @Override
@@ -552,7 +369,7 @@ public class CardRoomServiceImpl implements CardRoomService {
             releaseLockAfterTransaction(lock);
         }
 
-        CardRoomVO vo = toRoomVO(room, user.getId());
+        CardRoomVO vo = cardRoomViewAssembler.toRoomVO(room, user.getId());
         pushAfterCommit(
                 roomId,
                 user.getId(),
@@ -570,13 +387,19 @@ public class CardRoomServiceImpl implements CardRoomService {
         if (room.getStatus() != CardConstant.ROOM_STATUS_ACTIVE) {
             throw new BusinessException(ErrorCode.ROOM_ALREADY_ENDED);
         }
-        if (req.getType() != CardConstant.FUND_TYPE_ADD &&
-                req.getType() != CardConstant.FUND_TYPE_DEDUCT) {
+        int fundType = CardConstant.FUND_TYPE_ADD;
+        if (req.getType() != null && req.getType() != CardConstant.FUND_TYPE_ADD) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "资金类型错误");
         }
         int amountYuan = requirePositiveIntegerAmount(req.getAmount());
         List<Long> participantIds = req.getParticipantIds();
         Set<Long> participantSet = new LinkedHashSet<>(participantIds);
+        if (participantSet.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "请至少选择一位平摊成员");
+        }
+        if (participantSet.contains(user.getId())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "发起人不用选进平摊成员");
+        }
         if (participantSet.size() != participantIds.size()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "分摊人不能重复");
         }
@@ -597,7 +420,7 @@ public class CardRoomServiceImpl implements CardRoomService {
 
             CardFundRecord fund = new CardFundRecord();
             fund.setRoomId(roomId);
-            fund.setType(req.getType());
+            fund.setType(fundType);
             fund.setAmount(amountFen);
             fund.setCreatorId(user.getId());
             cardFundRecordMapper.insert(fund);
@@ -618,102 +441,12 @@ public class CardRoomServiceImpl implements CardRoomService {
             releaseLockAfterTransaction(lock);
         }
 
-        CardRoomVO vo = toRoomVO(room, user.getId());
+        CardRoomVO vo = cardRoomViewAssembler.toRoomVO(room, user.getId());
         pushAfterCommit(
                 roomId,
                 user.getId(),
                 CardWebSocketHandler.EVENT_FUND_CREATED,
                 vo.getRecentFunds().get(0));
-        return vo;
-    }
-
-    @Override
-    @Transactional
-    public CardRoomVO addExpense(Long roomId, AddExpenseRequest req, HttpServletRequest request) {
-        User user = loginUser(request);
-        CardRoom room = requireRoom(roomId);
-        requireOwner(room, user.getId());
-        if (room.getStatus() != CardConstant.ROOM_STATUS_ACTIVE) {
-            throw new BusinessException(ErrorCode.ROOM_ALREADY_ENDED);
-        }
-        if (req.getType() != CardConstant.EXPENSE_TYPE_TEA &&
-                req.getType() != CardConstant.EXPENSE_TYPE_MEAL) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "费用类型错误");
-        }
-
-        List<Long> participantIds = req.getParticipantIds();
-        Set<Long> participantSet = new LinkedHashSet<>(participantIds);
-        if (participantSet.size() != participantIds.size()) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "分摊人不能重复");
-        }
-
-        List<Long> activeMemberIds = cardRoomMapper.selectActiveMemberIds(roomId);
-        if (!new HashSet<>(activeMemberIds).containsAll(participantSet)) {
-            throw new BusinessException(ErrorCode.ROUND_MEMBER_MISSING, "分摊人包含非房间成员");
-        }
-
-        String lockKey = CardConstant.LOCK_EXPENSE + roomId;
-        RLock lock = redissonClient.getLock(lockKey);
-        try {
-            if (!lock.tryLock(3, TimeUnit.SECONDS)) {
-                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "操作过于频繁，请稍后重试");
-            }
-
-            CardExpense expense = new CardExpense();
-            expense.setRoomId(roomId);
-            expense.setType(req.getType());
-            expense.setAmount(req.getAmount());
-            expense.setPayerId(user.getId());
-            cardExpenseMapper.insert(expense);
-
-            List<CardExpenseParticipant> participants = new ArrayList<>();
-            for (Long pid : participantIds) {
-                CardExpenseParticipant p = new CardExpenseParticipant();
-                p.setExpenseId(expense.getId());
-                p.setUserId(pid);
-                participants.add(p);
-            }
-            cardExpenseParticipantMapper.insertBatch(participants);
-
-            int participantCount = participantIds.size();
-            int sharePerPerson = req.getAmount() / participantCount;
-            int remainder = req.getAmount() % participantCount;
-
-            for (int i = 0; i < participantIds.size(); i++) {
-                Long pid = participantIds.get(i);
-                int charge = sharePerPerson + (i < remainder ? 1 : 0);
-                int delta = -charge;
-                if (pid.equals(user.getId())) {
-                    delta += req.getAmount();
-                }
-                cardRoomMemberMapper.updateScoreIncrement(
-                        requireMember(roomId, pid).getId(), delta);
-            }
-            if (!participantSet.contains(user.getId())) {
-                cardRoomMemberMapper.updateScoreIncrement(
-                        requireMember(roomId, user.getId()).getId(), req.getAmount());
-            }
-
-            if (req.getType() == CardConstant.EXPENSE_TYPE_TEA) {
-                room.setTeaAmount(room.getTeaAmount() + req.getAmount());
-            } else {
-                room.setMealAmount(room.getMealAmount() + req.getAmount());
-            }
-            cardRoomMapper.updateById(room);
-
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "操作被中断");
-        } finally {
-            releaseLockAfterTransaction(lock);
-        }
-
-        CardRoomVO vo = toRoomVO(room, user.getId());
-        pushAfterCommit(
-                roomId,
-                user.getId(),
-                CardWebSocketHandler.EVENT_EXPENSE_CREATED,
-                vo.getRecentExpenses().get(0));
         return vo;
     }
 
@@ -771,7 +504,7 @@ public class CardRoomServiceImpl implements CardRoomService {
             room.setSettleTime(new Date());
             cardRoomMapper.updateById(room);
 
-            CardRoomVO vo = toRoomVO(room, user.getId());
+            CardRoomVO vo = cardRoomViewAssembler.toRoomVO(room, user.getId());
             pushAfterCommit(roomId, user.getId(), CardWebSocketHandler.EVENT_ROOM_CLOSED, vo);
             runAfterCommit(this::cleanupCardHistorySafely);
             return vo;
@@ -782,6 +515,155 @@ public class CardRoomServiceImpl implements CardRoomService {
         } finally {
             releaseLockAfterTransaction(lock);
         }
+    }
+
+    @Override
+    @Transactional
+    public CardRoomVO requestRoundUndo(Long roomId, Long roundId, HttpServletRequest request) {
+        User user = loginUser(request);
+        CardRoom room = requireUndoableRoom(roomId, user.getId());
+        CardRound round = cardRoundMapper.selectById(roundId);
+        if (round == null || !roomId.equals(round.getRoomId())) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "收支记录不存在");
+        }
+        if (!user.getId().equals(round.getCreatorId())) {
+            throw new BusinessException(ErrorCode.NO_AUTH, "只有记这条账的人才能申请撤销");
+        }
+        List<CardRoundScore> scores = cardRoundScoreMapper.selectByRoundId(roundId);
+        Set<Long> participantIds = CardLedgerParticipantUtils.roundScoreUserIds(scores);
+        createOrApproveUndo(roomId, CardConstant.UNDO_TARGET_ROUND, roundId, participantIds, user.getId());
+        tryCompleteUndo(room, CardConstant.UNDO_TARGET_ROUND, roundId, participantIds);
+        CardRoomVO vo = cardRoomViewAssembler.toRoomVO(room, user.getId());
+        pushAfterCommit(roomId, user.getId(), CardWebSocketHandler.EVENT_ROUND_CREATED, vo);
+        return vo;
+    }
+
+    @Override
+    @Transactional
+    public CardRoomVO requestFundUndo(Long roomId, Long fundId, HttpServletRequest request) {
+        User user = loginUser(request);
+        CardRoom room = requireUndoableRoom(roomId, user.getId());
+        CardFundRecord fund = cardFundRecordMapper.selectById(fundId);
+        if (fund == null || !roomId.equals(fund.getRoomId())) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "资金记录不存在");
+        }
+        if (!user.getId().equals(fund.getCreatorId())) {
+            throw new BusinessException(ErrorCode.NO_AUTH, "只有记这条账的人才能申请撤销");
+        }
+        List<CardFundParticipant> participants = cardFundParticipantMapper.selectByFundId(fundId);
+        Set<Long> participantIds = CardLedgerParticipantUtils.fundParticipantUserIds(fund, participants);
+        createOrApproveUndo(roomId, CardConstant.UNDO_TARGET_FUND, fundId, participantIds, user.getId());
+        tryCompleteUndo(room, CardConstant.UNDO_TARGET_FUND, fundId, participantIds);
+        CardRoomVO vo = cardRoomViewAssembler.toRoomVO(room, user.getId());
+        pushAfterCommit(roomId, user.getId(), CardWebSocketHandler.EVENT_FUND_CREATED, vo);
+        return vo;
+    }
+
+    @Override
+    @Transactional
+    public CardRoomVO approveUndo(Long roomId, Long undoRequestId, HttpServletRequest request) {
+        User user = loginUser(request);
+        CardRoom room = requireUndoableRoom(roomId, user.getId());
+        CardUndoRequest undo = cardUndoRequestMapper.selectById(undoRequestId);
+        if (undo == null || !roomId.equals(undo.getRoomId())
+                || undo.getStatus() != CardConstant.UNDO_STATUS_PENDING) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "撤销申请不存在或已处理");
+        }
+        Set<Long> participantIds = undoParticipantIds(undo);
+        if (!participantIds.contains(user.getId())) {
+            throw new BusinessException(ErrorCode.NO_AUTH, "只有参与这条记录的人才能同意撤销");
+        }
+        approveUndoRequest(undo.getId(), user.getId());
+        tryCompleteUndo(room, undo.getTargetType(), undo.getTargetId(), participantIds);
+        CardRoomVO vo = cardRoomViewAssembler.toRoomVO(room, user.getId());
+        pushAfterCommit(roomId, user.getId(), CardWebSocketHandler.EVENT_ROUND_CREATED, vo);
+        return vo;
+    }
+
+    private CardRoom requireUndoableRoom(Long roomId, Long userId) {
+        CardRoom room = requireRoom(roomId);
+        requireMember(roomId, userId);
+        if (room.getStatus() != CardConstant.ROOM_STATUS_ACTIVE) {
+            throw new BusinessException(ErrorCode.ROOM_ALREADY_ENDED, "房间已结束，不能撤销历史记录");
+        }
+        return room;
+    }
+
+    private void createOrApproveUndo(
+            Long roomId,
+            Integer targetType,
+            Long targetId,
+            Set<Long> participantIds,
+            Long userId) {
+        if (!participantIds.contains(userId)) {
+            throw new BusinessException(ErrorCode.NO_AUTH, "只有参与这条记录的人才能申请撤销");
+        }
+        CardUndoRequest undo = cardUndoRequestMapper.selectPending(roomId, targetType, targetId);
+        if (undo == null) {
+            undo = new CardUndoRequest();
+            undo.setRoomId(roomId);
+            undo.setTargetType(targetType);
+            undo.setTargetId(targetId);
+            undo.setRequesterId(userId);
+            undo.setStatus(CardConstant.UNDO_STATUS_PENDING);
+            cardUndoRequestMapper.insert(undo);
+        }
+        approveUndoRequest(undo.getId(), userId);
+    }
+
+    private void approveUndoRequest(Long requestId, Long userId) {
+        CardUndoApproval approval = new CardUndoApproval();
+        approval.setRequestId(requestId);
+        approval.setUserId(userId);
+        cardUndoApprovalMapper.insertIgnore(approval);
+    }
+
+    private Set<Long> undoParticipantIds(CardUndoRequest undo) {
+        if (undo.getTargetType() == CardConstant.UNDO_TARGET_ROUND) {
+            return CardLedgerParticipantUtils.roundScoreUserIds(
+                    cardRoundScoreMapper.selectByRoundId(undo.getTargetId()));
+        }
+        if (undo.getTargetType() == CardConstant.UNDO_TARGET_FUND) {
+            CardFundRecord fund = cardFundRecordMapper.selectById(undo.getTargetId());
+            if (fund == null) return Set.of();
+            return CardLedgerParticipantUtils.fundParticipantUserIds(
+                    fund,
+                    cardFundParticipantMapper.selectByFundId(undo.getTargetId()));
+        }
+        return Set.of();
+    }
+
+    private void tryCompleteUndo(
+            CardRoom room,
+            Integer targetType,
+            Long targetId,
+            Set<Long> participantIds) {
+        CardUndoRequest undo = cardUndoRequestMapper.selectPending(room.getId(), targetType, targetId);
+        if (undo == null || participantIds.isEmpty()) return;
+        int approvedCount = cardUndoApprovalMapper.countByRequestId(undo.getId());
+        if (approvedCount < participantIds.size()) return;
+
+        if (targetType == CardConstant.UNDO_TARGET_ROUND) {
+            undoRound(room.getId(), targetId);
+        } else if (targetType == CardConstant.UNDO_TARGET_FUND) {
+            undoFund(targetId);
+        }
+        cardUndoRequestMapper.markDone(undo.getId());
+    }
+
+    private void undoRound(Long roomId, Long roundId) {
+        List<CardRoundScore> scores = cardRoundScoreMapper.selectByRoundId(roundId);
+        for (CardRoundScore score : scores) {
+            CardRoomMember member = requireMember(roomId, score.getUserId());
+            cardRoomMemberMapper.updateScoreIncrement(member.getId(), -score.getScore());
+        }
+        cardRoundScoreMapper.deleteByRoundId(roundId);
+        cardRoundMapper.deleteById(roundId);
+    }
+
+    private void undoFund(Long fundId) {
+        cardFundParticipantMapper.deleteByFundId(fundId);
+        cardFundRecordMapper.deleteById(fundId);
     }
 
     private void checkNotInActiveRoom(Long userId) {

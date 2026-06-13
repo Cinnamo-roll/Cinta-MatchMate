@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cinoo.matchmateserver.mapper.CardUndoRequestMapper">
+
+    <select id="selectPending" resultType="com.cinoo.matchmateserver.model.domain.CardUndoRequest">
+        SELECT id,
+               room_id AS roomId,
+               target_type AS targetType,
+               target_id AS targetId,
+               requester_id AS requesterId,
+               status,
+               create_time AS createTime,
+               done_time AS doneTime
+        FROM card_undo_request
+        WHERE room_id = #{roomId}
+          AND target_type = #{targetType}
+          AND target_id = #{targetId}
+          AND status = 0
+        LIMIT 1
+    </select>
+
+    <select id="selectPendingByRoomId" resultType="com.cinoo.matchmateserver.model.domain.CardUndoRequest">
+        SELECT id,
+               room_id AS roomId,
+               target_type AS targetType,
+               target_id AS targetId,
+               requester_id AS requesterId,
+               status,
+               create_time AS createTime,
+               done_time AS doneTime
+        FROM card_undo_request
+        WHERE room_id = #{roomId}
+          AND status = 0
+        ORDER BY create_time DESC
+    </select>
+
+    <update id="markDone">
+        UPDATE card_undo_request
+        SET status = 1,
+            done_time = NOW()
+        WHERE id = #{requestId}
+          AND status = 0
+    </update>
+
+</mapper>

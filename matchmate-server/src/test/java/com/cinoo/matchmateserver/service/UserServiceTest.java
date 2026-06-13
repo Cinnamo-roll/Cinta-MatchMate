@@ -94,8 +94,26 @@ class UserServiceTest {
         verify(userMapper).insert(captor.capture());
         assertEquals(10L, userId);
         assertNotEquals(PASSWORD, captor.getValue().getUserPassword());
+        assertEquals(ACCOUNT, captor.getValue().getUsername());
+        assertEquals(UserConstant.DEFAULT_GENDER, captor.getValue().getGender());
         assertTrue(passwordService.matches(PASSWORD, captor.getValue().getUserPassword()));
         verify(cacheInvalidationService).userCollectionChanged();
+    }
+
+    @Test
+    void registerNormalizesAccountToLowercase() {
+        when(userMapper.selectCount(any())).thenReturn(0L);
+        when(userMapper.insert(any(User.class))).thenAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            user.setId(10L);
+            return 1;
+        });
+
+        userService.userRegister("TestUser", PASSWORD, PASSWORD);
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userMapper).insert(captor.capture());
+        assertEquals(ACCOUNT, captor.getValue().getUserAccount());
     }
 
     @Test
@@ -118,6 +136,19 @@ class UserServiceTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
 
         UserVO result = userService.doLogin(ACCOUNT, PASSWORD, request);
+
+        assertEquals(user.getId(), result.getId());
+        assertEquals(user.getId(), request.getSession().getAttribute(UserConstant.USER_LOGIN_STATE));
+    }
+
+    @Test
+    void loginAcceptsAccountWithDifferentCase() {
+        User user = activeUser();
+        user.setUserPassword(passwordService.encode(PASSWORD));
+        when(userMapper.selectOne(any())).thenReturn(user);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+
+        UserVO result = userService.doLogin("TestUser", PASSWORD, request);
 
         assertEquals(user.getId(), result.getId());
         assertEquals(user.getId(), request.getSession().getAttribute(UserConstant.USER_LOGIN_STATE));

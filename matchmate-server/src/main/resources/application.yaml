@@ -58,6 +58,7 @@ management:
 matchmate:
   cors:
     allowed-origins: ${MATCHMATE_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost,capacitor://localhost}
+    allowed-origin-patterns: ${MATCHMATE_CORS_ALLOWED_ORIGIN_PATTERNS:http://192.168.*:*}
   cache:
     enabled: ${CACHE_ENABLED:true}
     lock-wait: 2s

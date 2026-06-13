@@ -13,5 +13,9 @@ public interface CardFundParticipantMapper extends BaseMapper<CardFundParticipan
 
     List<CardFundParticipant> selectByFundIds(@Param("fundIds") List<Long> fundIds);
 
+    List<CardFundParticipant> selectByFundId(@Param("fundId") Long fundId);
+
     int insertBatch(@Param("list") List<CardFundParticipant> participants);
+
+    int deleteByFundId(@Param("fundId") Long fundId);
 }

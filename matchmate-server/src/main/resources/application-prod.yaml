@@ -5,10 +5,11 @@ springdoc:
     enabled: false
 
 server:
+  forward-headers-strategy: framework
   servlet:
     session:
       cookie:
-        secure: true
+        secure: ${SESSION_COOKIE_SECURE:true}
 
 aliyun:
   oss:

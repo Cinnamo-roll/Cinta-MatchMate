@@ -1,7 +1,6 @@
 package com.cinoo.matchmateserver.controller;
 
 import com.cinoo.matchmateserver.exception.BusinessException;
-import com.cinoo.matchmateserver.model.request.AddExpenseRequest;
 import com.cinoo.matchmateserver.model.request.JoinRoomRequest;
 import com.cinoo.matchmateserver.service.CardRoomService;
 import com.cinoo.matchmateserver.websocket.AuthHandshakeInterceptor;

@@ -20,7 +20,7 @@ public interface UserMapper extends BaseMapper<User> {
     List<User> recommendUsers(@Param("limit") int limit);
 
     /**
-     * 查询全体用户积分排名。
+     * 查询全体用户排名。
      */
     List<User> selectCardRanking(
             @Param("userId") Long userId,

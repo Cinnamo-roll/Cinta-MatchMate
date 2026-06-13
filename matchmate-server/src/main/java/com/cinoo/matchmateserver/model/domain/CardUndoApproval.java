@@ -1,21 +1,26 @@
 package com.cinoo.matchmateserver.model.domain;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
-/**
- * 费用分摊明细实体。
- */
-@TableName("cardExpenseParticipant")
+import java.util.Date;
+
+@TableName("card_undo_approval")
 @Data
-public class CardExpenseParticipant {
+public class CardUndoApproval {
 
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private Long expenseId;
+    @TableField("request_id")
+    private Long requestId;
 
+    @TableField("user_id")
     private Long userId;
+
+    @TableField("create_time")
+    private Date createTime;
 }

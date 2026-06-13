@@ -1,108 +1,102 @@
--- ============================================
--- 打牌记账本 - 多人房间功能数据库迁移
--- ============================================
+-- MatchMate card ledger schema reference.
+-- Amount fields are stored in fen.
 
--- 房间表
 CREATE TABLE cardRoom (
-    id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT '房间ID',
-    roomCode      CHAR(6)      NOT NULL COMMENT '6位数字房号',
-    ownerId       BIGINT       NOT NULL COMMENT '房主用户ID',
-    status        TINYINT      NOT NULL DEFAULT 0 COMMENT '状态: 0-进行中 1-已结束',
-    maxMembers    TINYINT      NOT NULL DEFAULT 8 COMMENT '最大成员数',
-    teaAmount     INT          NOT NULL DEFAULT 0 COMMENT '茶钱总额(分)',
-    mealAmount    INT          NOT NULL DEFAULT 0 COMMENT '饭钱总额(分)',
-    settleTime    DATETIME     DEFAULT NULL COMMENT '结算时间',
-    createTime    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    updateTime    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    isDelete      TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除: 0-未删除 1-已删除',
+    id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT 'room id',
+    roomCode      CHAR(6)      NOT NULL COMMENT 'six digit room code',
+    ownerId       BIGINT       NOT NULL COMMENT 'owner user id',
+    status        TINYINT      NOT NULL DEFAULT 0 COMMENT '0-active 1-ended',
+    maxMembers    TINYINT      NOT NULL DEFAULT 8 COMMENT 'max member count',
+    settleTime    DATETIME     DEFAULT NULL COMMENT 'settle time',
+    createTime    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'create time',
+    updateTime    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'update time',
+    isDelete      TINYINT      NOT NULL DEFAULT 0 COMMENT '0-normal 1-deleted',
     UNIQUE KEY uk_roomCode (roomCode),
     INDEX idx_ownerId (ownerId),
     INDEX idx_status (status),
     INDEX idx_retention (status, isDelete, createTime, id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='打牌记账房间';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='card ledger room';
 
--- 房间成员表
 CREATE TABLE cardRoomMember (
-    id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT 'ID',
-    roomId        BIGINT       NOT NULL COMMENT '房间ID',
-    userId        BIGINT       NOT NULL COMMENT '用户ID',
-    status        TINYINT      NOT NULL DEFAULT 0 COMMENT '状态: 0-在房间 1-已退出 2-已结算',
-    totalScore    INT          NOT NULL DEFAULT 0 COMMENT '当前总积分(牌局+费用分摊)',
-    settleScore   INT          DEFAULT NULL COMMENT '退出/结算时冻结的最终积分',
-    wins          INT          NOT NULL DEFAULT 0 COMMENT '房间内胜局数',
-    losses        INT          NOT NULL DEFAULT 0 COMMENT '房间内负局数',
-    joinTime      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '加入时间',
-    leaveTime     DATETIME     DEFAULT NULL COMMENT '退出/结算时间',
+    id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT 'id',
+    roomId        BIGINT       NOT NULL COMMENT 'room id',
+    userId        BIGINT       NOT NULL COMMENT 'user id',
+    status        TINYINT      NOT NULL DEFAULT 0 COMMENT '0-in room 1-left 2-settled',
+    totalScore    INT          NOT NULL DEFAULT 0 COMMENT 'current amount in fen',
+    settleScore   INT          DEFAULT NULL COMMENT 'frozen amount in fen when settled',
+    wins          INT          NOT NULL DEFAULT 0 COMMENT 'win count in room',
+    losses        INT          NOT NULL DEFAULT 0 COMMENT 'loss count in room',
+    joinTime      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'join time',
+    leaveTime     DATETIME     DEFAULT NULL COMMENT 'leave or settle time',
     UNIQUE KEY uk_room_user (roomId, userId),
     INDEX idx_userId (userId),
     INDEX idx_room_status (roomId, status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='房间成员';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='card ledger room member';
 
--- 牌局表
 CREATE TABLE cardRound (
-    id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT '牌局ID',
-    roomId        BIGINT       NOT NULL COMMENT '房间ID',
-    roundNo       INT          NOT NULL COMMENT '局号(房间内递增)',
-    settled       TINYINT      NOT NULL DEFAULT 0 COMMENT '是否已结算: 0-未结算 1-已结算',
-    creatorId     BIGINT       NOT NULL COMMENT '记录人ID',
-    createTime    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT 'round id',
+    roomId        BIGINT       NOT NULL COMMENT 'room id',
+    roundNo       INT          NOT NULL COMMENT 'legacy sequence number',
+    settled       TINYINT      NOT NULL DEFAULT 0 COMMENT '0-not settled 1-settled',
+    creatorId     BIGINT       NOT NULL COMMENT 'creator user id',
+    createTime    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'create time',
     UNIQUE KEY uk_room_round (roomId, roundNo),
     INDEX idx_roomId (roomId, createTime DESC)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='牌局记录';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='card ledger transfer record';
 
--- 牌局分数表
 CREATE TABLE cardRoundScore (
-    id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT 'ID',
-    roundId       BIGINT       NOT NULL COMMENT '牌局ID',
-    userId        BIGINT       NOT NULL COMMENT '用户ID',
-    score         INT          NOT NULL COMMENT '本局积分(可正可负)',
+    id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT 'id',
+    roundId       BIGINT       NOT NULL COMMENT 'round id',
+    userId        BIGINT       NOT NULL COMMENT 'user id',
+    score         INT          NOT NULL COMMENT 'amount in fen, positive means income',
     UNIQUE KEY uk_round_user (roundId, userId),
     INDEX idx_roundId (roundId),
     INDEX idx_userId (userId)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='牌局分数';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='card ledger transfer detail';
 
--- 费用表（茶/饭）
-CREATE TABLE cardExpense (
-    id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT '费用ID',
-    roomId        BIGINT       NOT NULL COMMENT '房间ID',
-    type          TINYINT      NOT NULL COMMENT '类型: 1-茶钱 2-饭钱',
-    amount        INT          NOT NULL COMMENT '金额(分)',
-    payerId       BIGINT       NOT NULL COMMENT '支付人ID',
-    createTime    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    INDEX idx_roomId (roomId, createTime DESC)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='费用记录';
-
--- 费用分摊表
-CREATE TABLE cardExpenseParticipant (
-    id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT 'ID',
-    expenseId     BIGINT       NOT NULL COMMENT '费用ID',
-    userId        BIGINT       NOT NULL COMMENT '分摊用户ID',
-    UNIQUE KEY uk_expense_user (expenseId, userId),
-    INDEX idx_userId (userId)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='费用分摊明细';
-
--- 用户表新增统计字段
-ALTER TABLE `user`
-  ADD COLUMN totalScore INT NOT NULL DEFAULT 0 COMMENT '累计积分',
-  ADD COLUMN wins       INT NOT NULL DEFAULT 0 COMMENT '累计胜局',
-  ADD COLUMN losses     INT NOT NULL DEFAULT 0 COMMENT '累计负局',
-  ADD COLUMN winRate    DECIMAL(5,4) NOT NULL DEFAULT 0.0000 COMMENT '胜率';
-
--- 房间资金记录，amount 统一按分存储
 CREATE TABLE card_fund_record (
-    id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT '资金记录ID',
-    room_id       BIGINT       NOT NULL COMMENT '房间ID',
-    type          TINYINT      NOT NULL COMMENT '类型: 1-加钱 2-扣钱',
-    amount        INT          NOT NULL COMMENT '金额(分)',
-    creator_id    BIGINT       NOT NULL COMMENT '发起用户ID',
-    create_time   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT 'fund record id',
+    room_id       BIGINT       NOT NULL COMMENT 'room id',
+    type          TINYINT      NOT NULL COMMENT '1-creator paid first',
+    amount        INT          NOT NULL COMMENT 'amount in fen',
+    creator_id    BIGINT       NOT NULL COMMENT 'creator user id',
+    create_time   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'create time',
     INDEX idx_room_id (room_id, create_time DESC)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='房间资金记录';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='shared fund record';
 
 CREATE TABLE card_fund_participant (
-    id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT 'ID',
-    fund_id       BIGINT       NOT NULL COMMENT '资金记录ID',
-    user_id       BIGINT       NOT NULL COMMENT '分摊用户ID',
+    id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT 'id',
+    fund_id       BIGINT       NOT NULL COMMENT 'fund record id',
+    user_id       BIGINT       NOT NULL COMMENT 'participant user id',
     UNIQUE KEY uk_fund_user (fund_id, user_id),
+    INDEX idx_fund_id (fund_id),
     INDEX idx_user_id (user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='房间资金分摊明细';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='shared fund participant';
+
+CREATE TABLE card_undo_request (
+    id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT 'undo request id',
+    room_id       BIGINT       NOT NULL COMMENT 'room id',
+    target_type   TINYINT      NOT NULL COMMENT '1-transfer record 2-fund record',
+    target_id     BIGINT       NOT NULL COMMENT 'target id',
+    requester_id  BIGINT       NOT NULL COMMENT 'requester user id',
+    status        TINYINT      NOT NULL DEFAULT 0 COMMENT '0-pending 1-undone',
+    create_time   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'create time',
+    done_time     DATETIME     DEFAULT NULL COMMENT 'done time',
+    UNIQUE KEY uk_pending_target (room_id, target_type, target_id, status),
+    INDEX idx_room_status (room_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='card ledger undo request';
+
+CREATE TABLE card_undo_approval (
+    id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT 'approval id',
+    request_id    BIGINT       NOT NULL COMMENT 'undo request id',
+    user_id       BIGINT       NOT NULL COMMENT 'approver user id',
+    create_time   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'create time',
+    UNIQUE KEY uk_request_user (request_id, user_id),
+    INDEX idx_request_id (request_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='card ledger undo approval';
+
+ALTER TABLE `user`
+  ADD COLUMN totalScore INT NOT NULL DEFAULT 0 COMMENT 'total amount in fen',
+  ADD COLUMN wins       INT NOT NULL DEFAULT 0 COMMENT 'total wins',
+  ADD COLUMN losses     INT NOT NULL DEFAULT 0 COMMENT 'total losses',
+  ADD COLUMN winRate    DECIMAL(5,4) NOT NULL DEFAULT 0.0000 COMMENT 'win rate';

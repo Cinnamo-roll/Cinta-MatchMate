@@ -23,8 +23,8 @@ public enum ErrorCode {
     ROOM_NOT_OWNER(40301, HttpStatus.FORBIDDEN, "Not room owner", "仅房主可执行此操作"),
     ROOM_ALREADY_IN(40002, HttpStatus.BAD_REQUEST, "Already in a room", "你已在其他房间中"),
     ROOM_NOT_MEMBER(40003, HttpStatus.BAD_REQUEST, "Not a room member", "你不是该房间成员"),
-    ROUND_SUM_NOT_ZERO(40004, HttpStatus.BAD_REQUEST, "Round score sum must be zero", "牌局积分之和必须为0"),
-    ROUND_MEMBER_MISSING(40005, HttpStatus.BAD_REQUEST, "Round member missing", "牌局包含非房间成员"),
+    ROUND_SUM_NOT_ZERO(40004, HttpStatus.BAD_REQUEST, "Round score sum must be zero", "金额合计必须为0"),
+    ROUND_MEMBER_MISSING(40005, HttpStatus.BAD_REQUEST, "Round member missing", "收支记录包含非房间成员"),
     ROOM_ALREADY_ENDED(40006, HttpStatus.BAD_REQUEST, "Room already ended", "房间已结束"),
     ROOM_ALREADY_SETTLED(40007, HttpStatus.BAD_REQUEST, "Already settled", "已结算，不能重复操作");
 

@@ -11,11 +11,23 @@
         </foreach>
     </select>
 
+    <select id="selectByFundId" resultType="com.cinoo.matchmateserver.model.domain.CardFundParticipant">
+        SELECT id, fund_id AS fundId, user_id AS userId
+        FROM card_fund_participant
+        WHERE fund_id = #{fundId}
+        ORDER BY id ASC
+    </select>
+
     <insert id="insertBatch" parameterType="list">
         INSERT INTO card_fund_participant (fund_id, user_id) VALUES
         <foreach collection="list" item="item" separator=",">
             (#{item.fundId}, #{item.userId})
         </foreach>
     </insert>
+
+    <delete id="deleteByFundId">
+        DELETE FROM card_fund_participant
+        WHERE fund_id = #{fundId}
+    </delete>
 
 </mapper>

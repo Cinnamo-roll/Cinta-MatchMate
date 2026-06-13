@@ -32,6 +32,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
@@ -79,17 +80,20 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public long userRegister(String userAccount, String userPassword, String checkPassword) {
-        validateAccountAndPassword(userAccount, userPassword);
+        String normalizedAccount = normalizeAccount(userAccount);
+        validateAccountAndPassword(normalizedAccount, userPassword);
         if (!userPassword.equals(checkPassword)) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "两次密码不相同");
         }
 
-        if (accountExists(userAccount)) {
+        if (accountExists(normalizedAccount)) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "用户已存在");
         }
 
         User user = new User();
-        user.setUserAccount(userAccount);
+        user.setUserAccount(normalizedAccount);
+        user.setUsername(normalizedAccount);
+        user.setGender(UserConstant.DEFAULT_GENDER);
         user.setUserPassword(passwordService.encode(userPassword));
 
         try {
@@ -106,11 +110,12 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserVO doLogin(String userAccount, String userPassword, HttpServletRequest request) {
-        validateAccountAndPassword(userAccount, userPassword);
+        String normalizedAccount = normalizeAccount(userAccount);
+        validateAccountAndPassword(normalizedAccount, userPassword);
 
-        User user = findByAccount(userAccount);
+        User user = findByAccount(normalizedAccount);
         if (user == null || !passwordService.matches(userPassword, user.getUserPassword())) {
-            log.info("User login failed, account={}", userAccount);
+            log.info("User login failed, account={}", normalizedAccount);
             throw new BusinessException(ErrorCode.PARAM_ERROR, "用户不存在或密码错误");
         }
         if (!isActive(user)) {
@@ -456,7 +461,11 @@ public class UserServiceImpl implements UserService {
     }
 
     private LambdaQueryWrapper<User> accountQuery(String userAccount) {
-        return new LambdaQueryWrapper<User>().eq(User::getUserAccount, userAccount);
+        return new LambdaQueryWrapper<User>().apply("LOWER(userAccount) = {0}", userAccount);
+    }
+
+    private String normalizeAccount(String userAccount) {
+        return StringUtils.trimToEmpty(userAccount).toLowerCase(Locale.ROOT);
     }
 
     private boolean isActive(User user) {

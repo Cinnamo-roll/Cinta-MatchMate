@@ -23,6 +23,7 @@ public class CardFundRecordVO implements Serializable {
     private Date createTime;
 
     private List<Participant> participants;
+    private CardUndoStatusVO undoStatus;
 
     @Data
     public static class Participant implements Serializable {

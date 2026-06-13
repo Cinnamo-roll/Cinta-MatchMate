@@ -2,7 +2,6 @@ package com.cinoo.matchmateserver.controller;
 
 import com.cinoo.matchmateserver.common.BaseResponse;
 import com.cinoo.matchmateserver.common.ResultUtils;
-import com.cinoo.matchmateserver.model.request.AddExpenseRequest;
 import com.cinoo.matchmateserver.model.request.AddFundRequest;
 import com.cinoo.matchmateserver.model.request.AddTransferRequest;
 import com.cinoo.matchmateserver.model.request.JoinRoomRequest;
@@ -43,7 +42,7 @@ public class CardRoomController {
         return ResultUtils.success(cardRoomService.joinRoom(req.getRoomCode(), request));
     }
 
-    @Operation(summary = "获取房间详情", description = "获取房间完整详情，含成员、最近牌局和费用")
+    @Operation(summary = "获取房间详情", description = "获取房间完整详情，含成员、最近收支和资金平摊")
     @GetMapping("/{roomId}")
     public BaseResponse<CardRoomVO> getRoomDetail(
             @PathVariable Long roomId,
@@ -66,7 +65,7 @@ public class CardRoomController {
         return ResultUtils.success(cardRoomService.getHistory(limit, request));
     }
 
-    @Operation(summary = "查询牌友排名", description = "按累计积分查询当前用户和共同牌友")
+    @Operation(summary = "查询牌友排名", description = "按赢得金额查询当前用户和共同牌友")
     @GetMapping("/ranking")
     public BaseResponse<List<UserVO>> getRanking(
             @RequestParam(defaultValue = "5") int limit,
@@ -83,7 +82,7 @@ public class CardRoomController {
         return ResultUtils.success(null);
     }
 
-    @Operation(summary = "每局转账", description = "成员向其他成员转账，转出扣分、转入加分，总分必须为0")
+    @Operation(summary = "记一笔收支", description = "成员向其他成员记一笔收支，转出记为负数、转入记为正数，金额合计必须为0")
     @PostMapping("/{roomId}/transfer")
     public BaseResponse<CardRoomVO> addTransfer(
             @PathVariable Long roomId,
@@ -92,7 +91,7 @@ public class CardRoomController {
         return ResultUtils.success(cardRoomService.addTransfer(roomId, req, request));
     }
 
-    @Operation(summary = "金额平摊", description = "成员发起平摊资金（加钱/扣钱），不计入排行榜积分")
+    @Operation(summary = "资金平摊", description = "成员发起资金平摊，记录谁先付、谁需要给他多少钱")
     @PostMapping("/{roomId}/fund")
     public BaseResponse<CardRoomVO> addFund(
             @PathVariable Long roomId,
@@ -101,20 +100,38 @@ public class CardRoomController {
         return ResultUtils.success(cardRoomService.addFund(roomId, req, request));
     }
 
-    @Operation(summary = "新增费用", description = "房主新增茶钱/饭钱记录，选择参与分摊的成员")
-    @PostMapping("/{roomId}/expense")
-    public BaseResponse<CardRoomVO> addExpense(
-            @PathVariable Long roomId,
-            @Valid @RequestBody AddExpenseRequest req,
-            HttpServletRequest request) {
-        return ResultUtils.success(cardRoomService.addExpense(roomId, req, request));
-    }
-
-    @Operation(summary = "结束房间", description = "房主结束房间，结算所有成员积分并更新用户统计")
+    @Operation(summary = "结束房间", description = "房主结束房间，结算所有成员赢得金额并更新用户统计")
     @PostMapping("/{roomId}/end")
     public BaseResponse<CardRoomVO> endRoom(
             @PathVariable Long roomId,
             HttpServletRequest request) {
         return ResultUtils.success(cardRoomService.endRoom(roomId, request));
+    }
+
+    @Operation(summary = "申请撤销收支记录", description = "只有记这笔账的人可发起撤销，所有参与人同意后生效")
+    @PostMapping("/{roomId}/round/{roundId}/undo")
+    public BaseResponse<CardRoomVO> requestRoundUndo(
+            @PathVariable Long roomId,
+            @PathVariable Long roundId,
+            HttpServletRequest request) {
+        return ResultUtils.success(cardRoomService.requestRoundUndo(roomId, roundId, request));
+    }
+
+    @Operation(summary = "申请撤销资金记录", description = "只有记这笔资金的人可发起撤销，所有参与人同意后生效")
+    @PostMapping("/{roomId}/fund/{fundId}/undo")
+    public BaseResponse<CardRoomVO> requestFundUndo(
+            @PathVariable Long roomId,
+            @PathVariable Long fundId,
+            HttpServletRequest request) {
+        return ResultUtils.success(cardRoomService.requestFundUndo(roomId, fundId, request));
+    }
+
+    @Operation(summary = "同意撤销", description = "参与人同意撤销申请")
+    @PostMapping("/{roomId}/undo/{undoRequestId}/approve")
+    public BaseResponse<CardRoomVO> approveUndo(
+            @PathVariable Long roomId,
+            @PathVariable Long undoRequestId,
+            HttpServletRequest request) {
+        return ResultUtils.success(cardRoomService.approveUndo(roomId, undoRequestId, request));
     }
 }
