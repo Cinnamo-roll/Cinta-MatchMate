@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cinoo.matchmateserver.user.mapper.UserMapper">
+
+    <resultMap id="BaseResultMap" type="com.cinoo.matchmateserver.user.model.entity.User">
+            <id property="id" column="id" />
+            <result property="username" column="username" />
+            <result property="userAccount" column="userAccount" />
+            <result property="avatarUrl" column="avatarUrl" />
+            <result property="gender" column="gender" />
+            <result property="userPassword" column="userPassword" />
+            <result property="phone" column="phone" />
+            <result property="email" column="email" />
+            <result property="userStatus" column="userStatus" />
+            <result property="createTime" column="createTime" />
+            <result property="updateTime" column="updateTime" />
+            <result property="isDelete" column="isDelete" />
+            <result property="userRole" column="userRole" />
+            <result property="totalScore" column="totalScore" />
+            <result property="wins" column="wins" />
+            <result property="losses" column="losses" />
+            <result property="winRate" column="winRate" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,username,userAccount,avatarUrl,gender,userPassword,
+        phone,email,userStatus,createTime,updateTime,
+        isDelete,userRole,totalScore,wins,losses,winRate
+    </sql>
+
+    <select id="searchByKeywordAndTags" resultMap="BaseResultMap">
+        SELECT u.*
+        FROM user u
+        WHERE u.isDelete = 0
+          AND u.userStatus = 0
+        <if test="keyword != null and keyword != ''">
+          AND (
+            u.username LIKE CONCAT('%', #{keyword}, '%')
+            OR u.userAccount LIKE CONCAT('%', #{keyword}, '%')
+            OR EXISTS (
+              SELECT 1
+              FROM user_tag keyword_ut
+              JOIN tag keyword_t ON keyword_t.id = keyword_ut.tagId
+              WHERE keyword_ut.userId = u.id
+                AND keyword_t.isDelete = 0
+                AND keyword_t.tagName LIKE CONCAT('%', #{keyword}, '%')
+            )
+          )
+        </if>
+        <if test="tagCount > 0">
+          AND (
+            SELECT COUNT(DISTINCT selected_t.tagName)
+            FROM user_tag selected_ut
+            JOIN tag selected_t ON selected_t.id = selected_ut.tagId
+            WHERE selected_ut.userId = u.id
+              AND selected_t.isDelete = 0
+              AND selected_t.tagName IN
+              <foreach collection="tagList" item="tagName" open="(" separator="," close=")">
+                #{tagName}
+              </foreach>
+          ) = #{tagCount}
+        </if>
+        ORDER BY u.createTime DESC, u.id DESC
+    </select>
+
+    <select id="recommendUsers" resultMap="BaseResultMap">
+        SELECT u.*
+        FROM user u
+        WHERE u.isDelete = 0
+          AND u.userStatus = 0
+        ORDER BY RAND()
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectCardRanking" resultMap="BaseResultMap">
+        SELECT u.*
+        FROM user u
+        WHERE u.isDelete = 0
+          AND (
+            u.id = #{userId}
+            OR EXISTS (
+              SELECT 1
+              FROM cardRoomMember current_member
+              JOIN cardRoomMember shared_member
+                ON shared_member.roomId = current_member.roomId
+              WHERE current_member.userId = #{userId}
+                AND shared_member.userId = u.id
+            )
+          )
+        ORDER BY u.totalScore DESC, u.wins DESC, u.id ASC
+        LIMIT #{limit}
+    </select>
+
+    <update id="addStats">
+        UPDATE user
+        SET totalScore = totalScore + #{totalScore},
+            winRate = CASE
+                WHEN (wins + #{wins} + losses + #{losses}) = 0 THEN 0.0000
+                ELSE ROUND((wins + #{wins}) / (wins + #{wins} + losses + #{losses}), 4)
+            END,
+            wins = wins + #{wins},
+            losses = losses + #{losses}
+        WHERE id = #{userId}
+          AND isDelete = 0
+    </update>
+</mapper>

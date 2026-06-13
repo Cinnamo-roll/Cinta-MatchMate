@@ -1,6 +1,6 @@
 package com.cinoo.matchmateserver.config;
 
-import com.cinoo.matchmateserver.cache.CacheNames;
+import com.cinoo.matchmateserver.infrastructure.cache.CacheNames;
 import org.apache.commons.lang3.StringUtils;
 import org.redisson.spring.starter.RedissonAutoConfigurationCustomizer;
 import org.springframework.boot.data.redis.autoconfigure.DataRedisProperties;
@@ -22,13 +22,15 @@ import java.time.Duration;
 @Configuration(proxyBeanMethods = false)
 public class CacheConfig {
 
-    private static final String CACHE_PREFIX = "matchmate:cache:v2:";
+    // Cached JSON contains fully qualified class names, so package moves require a new namespace.
+    private static final String CACHE_PREFIX = "matchmate:cache:v3:";
 
     @Bean
     public RedisSerializer<Object> cacheValueSerializer() {
         PolymorphicTypeValidator typeValidator = BasicPolymorphicTypeValidator.builder()
                 .allowIfSubType("com.cinoo.matchmateserver.")
                 .allowIfSubType("java.lang.")
+                .allowIfSubType("java.math.")
                 .allowIfSubType("java.util.")
                 .allowIfSubTypeIsArray()
                 .build();

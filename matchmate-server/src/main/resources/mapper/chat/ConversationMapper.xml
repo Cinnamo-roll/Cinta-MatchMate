@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cinoo.matchmateserver.chat.mapper.ConversationMapper">
+
+    <resultMap id="BaseResultMap" type="com.cinoo.matchmateserver.chat.model.entity.Conversation">
+        <id property="id" column="id"/>
+        <result property="userId1" column="userId1"/>
+        <result property="userId2" column="userId2"/>
+        <result property="lastMessage" column="lastMessage"/>
+        <result property="lastMessageTime" column="lastMessageTime"/>
+        <result property="createTime" column="createTime"/>
+        <result property="updateTime" column="updateTime"/>
+        <result property="isDelete" column="isDelete"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, userId1, userId2, lastMessage, lastMessageTime, createTime, updateTime, isDelete
+    </sql>
+
+    <select id="selectByUserId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM conversation
+        WHERE isDelete = 0
+          AND lastMessageTime IS NOT NULL
+          AND (userId1 = #{userId} OR userId2 = #{userId})
+        ORDER BY lastMessageTime DESC, id DESC
+    </select>
+
+    <select id="selectByUserIds" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM conversation
+        WHERE isDelete = 0
+          AND ((userId1 = #{userId1} AND userId2 = #{userId2})
+            OR (userId1 = #{userId2} AND userId2 = #{userId1}))
+        LIMIT 1
+    </select>
+
+</mapper>

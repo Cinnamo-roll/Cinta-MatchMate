@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cinoo.matchmateserver.card.mapper.CardRoomMemberMapper">
+
+    <select id="selectActiveByRoomId" resultType="com.cinoo.matchmateserver.card.model.entity.CardRoomMember">
+        SELECT *
+        FROM cardRoomMember
+        WHERE roomId = #{roomId}
+          AND status = 0
+        ORDER BY joinTime ASC
+    </select>
+
+    <select id="selectByRoomId" resultType="com.cinoo.matchmateserver.card.model.entity.CardRoomMember">
+        SELECT *
+        FROM cardRoomMember
+        WHERE roomId = #{roomId}
+        ORDER BY joinTime ASC
+    </select>
+
+    <update id="updateScoreIncrement">
+        UPDATE cardRoomMember
+        SET totalScore = totalScore + #{delta}
+        WHERE id = #{memberId}
+    </update>
+
+    <update id="reactivate">
+        UPDATE cardRoomMember
+        SET status = 0,
+            joinTime = NOW(),
+            leaveTime = NULL
+        WHERE id = #{memberId}
+          AND status = 1
+    </update>
+
+    <update id="batchSettle">
+        UPDATE cardRoomMember
+        <trim prefix="SET" suffixOverrides=",">
+            status = CASE id
+                <foreach collection="list" item="m">
+                    WHEN #{m.id} THEN #{m.status}
+                </foreach>
+            END,
+            settleScore = CASE id
+                <foreach collection="list" item="m">
+                    WHEN #{m.id} THEN #{m.settleScore}
+                </foreach>
+            END,
+            wins = CASE id
+                <foreach collection="list" item="m">
+                    WHEN #{m.id} THEN #{m.wins}
+                </foreach>
+            END,
+            losses = CASE id
+                <foreach collection="list" item="m">
+                    WHEN #{m.id} THEN #{m.losses}
+                </foreach>
+            END,
+            leaveTime = NOW()
+        </trim>
+        WHERE id IN
+        <foreach collection="list" item="m" open="(" separator="," close=")">
+            #{m.id}
+        </foreach>
+    </update>
+
+</mapper>

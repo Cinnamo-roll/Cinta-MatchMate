@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cinoo.matchmateserver.tag.mapper.TagMapper">
+
+    <select id="selectTagNamesByUserId" resultType="java.lang.String">
+        SELECT t.tagName
+        FROM user_tag ut
+        JOIN tag t ON t.id = ut.tagId
+        WHERE ut.userId = #{userId}
+          AND t.isDelete = 0
+        ORDER BY ut.id
+    </select>
+</mapper>

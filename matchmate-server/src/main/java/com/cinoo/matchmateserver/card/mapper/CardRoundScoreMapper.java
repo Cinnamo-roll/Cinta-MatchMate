@@ -1,0 +1,30 @@
+package com.cinoo.matchmateserver.card.mapper;
+
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.cinoo.matchmateserver.card.model.entity.CardRoundScore;
+import org.apache.ibatis.annotations.Param;
+
+import java.util.List;
+
+/**
+ * 牌局分数 Mapper。
+ */
+public interface CardRoundScoreMapper extends BaseMapper<CardRoundScore> {
+
+    /**
+     * 查询某局所有分数。
+     */
+    List<CardRoundScore> selectByRoundId(@Param("roundId") Long roundId);
+
+    /**
+     * 批量查询多局的金额明细。
+     */
+    List<CardRoundScore> selectByRoundIds(@Param("roundIds") List<Long> roundIds);
+
+    int deleteByRoundId(@Param("roundId") Long roundId);
+
+    /**
+     * 批量插入。
+     */
+    int insertBatch(@Param("list") List<CardRoundScore> scores);
+}

@@ -8,7 +8,12 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
-@MapperScan("com.cinoo.matchmateserver.mapper")
+@MapperScan({
+        "com.cinoo.matchmateserver.user.mapper",
+        "com.cinoo.matchmateserver.tag.mapper",
+        "com.cinoo.matchmateserver.chat.mapper",
+        "com.cinoo.matchmateserver.card.mapper"
+})
 @EnableCaching
 @EnableScheduling
 @EnableAsync

@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cinoo.matchmateserver.card.mapper.CardRoomMapper">
+
+    <select id="selectActiveRoomByUserId" resultType="com.cinoo.matchmateserver.card.model.entity.CardRoom">
+        SELECT cr.*
+        FROM cardRoom cr
+        JOIN cardRoomMember crm ON cr.id = crm.roomId
+        WHERE crm.userId = #{userId}
+          AND crm.status = 0
+          AND cr.status = 0
+          AND cr.isDelete = 0
+        LIMIT 1
+    </select>
+
+    <select id="selectActiveMemberIds" resultType="long">
+        SELECT userId
+        FROM cardRoomMember
+        WHERE roomId = #{roomId}
+          AND status = 0
+    </select>
+
+    <select id="selectHistoryByUserId"
+            resultType="com.cinoo.matchmateserver.card.model.vo.CardRoomHistoryVO">
+        SELECT cr.id AS roomId,
+               cr.roomCode,
+               owner.username AS ownerName,
+               cr.status,
+               (SELECT COUNT(*) FROM cardRoomMember count_member
+                WHERE count_member.roomId = cr.id) AS memberCount,
+               COALESCE(crm.settleScore, crm.totalScore, 0) AS score,
+               cr.createTime,
+               cr.settleTime
+        FROM cardRoom cr
+        JOIN cardRoomMember crm ON crm.roomId = cr.id
+        LEFT JOIN user owner ON owner.id = cr.ownerId
+        WHERE crm.userId = #{userId}
+          AND cr.isDelete = 0
+        ORDER BY cr.createTime DESC, cr.id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectExpiredEndedRoomIds" resultType="long">
+        SELECT cr.id
+        FROM cardRoom cr
+        WHERE cr.status = 1
+          AND cr.isDelete = 0
+          AND EXISTS (
+            SELECT 1
+            FROM cardRoomMember existing_member
+            WHERE existing_member.roomId = cr.id
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM cardRoomMember member
+            WHERE member.roomId = cr.id
+              AND (
+                SELECT COUNT(*)
+                FROM cardRoom newer_room
+                JOIN cardRoomMember newer_member
+                  ON newer_member.roomId = newer_room.id
+                WHERE newer_member.userId = member.userId
+                  AND newer_room.status = 1
+                  AND newer_room.isDelete = 0
+                  AND (
+                    newer_room.createTime > cr.createTime
+                    OR (
+                      newer_room.createTime = cr.createTime
+                      AND newer_room.id > cr.id
+                    )
+                  )
+              ) &lt; #{retainCount}
+          )
+    </select>
+
+    <delete id="deleteFundParticipantsByRoomIds">
+        DELETE participant
+        FROM card_fund_participant participant
+        JOIN card_fund_record fund ON fund.id = participant.fund_id
+        WHERE fund.room_id IN
+        <foreach collection="roomIds" item="roomId" open="(" close=")" separator=",">
+            #{roomId}
+        </foreach>
+    </delete>
+
+    <delete id="deleteFundsByRoomIds">
+        DELETE FROM card_fund_record
+        WHERE room_id IN
+        <foreach collection="roomIds" item="roomId" open="(" close=")" separator=",">
+            #{roomId}
+        </foreach>
+    </delete>
+
+    <delete id="deleteRoundScoresByRoomIds">
+        DELETE score
+        FROM cardRoundScore score
+        JOIN cardRound round_record ON round_record.id = score.roundId
+        WHERE round_record.roomId IN
+        <foreach collection="roomIds" item="roomId" open="(" close=")" separator=",">
+            #{roomId}
+        </foreach>
+    </delete>
+
+    <delete id="deleteRoundsByRoomIds">
+        DELETE FROM cardRound
+        WHERE roomId IN
+        <foreach collection="roomIds" item="roomId" open="(" close=")" separator=",">
+            #{roomId}
+        </foreach>
+    </delete>
+
+    <delete id="deleteMembersByRoomIds">
+        DELETE FROM cardRoomMember
+        WHERE roomId IN
+        <foreach collection="roomIds" item="roomId" open="(" close=")" separator=",">
+            #{roomId}
+        </foreach>
+    </delete>
+
+    <delete id="deleteRoomsByIds">
+        DELETE FROM cardRoom
+        WHERE id IN
+        <foreach collection="roomIds" item="roomId" open="(" close=")" separator=",">
+            #{roomId}
+        </foreach>
+    </delete>
+
+</mapper>
