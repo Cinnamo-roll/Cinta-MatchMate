@@ -1,5 +1,6 @@
 package com.cinoo.matchmateserver.websocket;
 
+import com.cinoo.matchmateserver.constant.CardRoomEventType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -79,7 +80,7 @@ class CardWebSocketHandlerTest {
         handler.afterConnectionEstablished(session1);
         handler.afterConnectionEstablished(session2);
 
-        handler.pushEvent(ROOM_ID, null, CardWebSocketHandler.EVENT_ROUND_CREATED, "test-data");
+        handler.pushEvent(ROOM_ID, null, CardRoomEventType.ROUND_CREATED, "test-data");
 
         verify(session1).sendMessage(any(TextMessage.class));
         verify(session2).sendMessage(any(TextMessage.class));
@@ -90,7 +91,7 @@ class CardWebSocketHandlerTest {
         handler.afterConnectionEstablished(session1);
         handler.afterConnectionEstablished(session2);
 
-        handler.pushEvent(ROOM_ID, USER1_ID, CardWebSocketHandler.EVENT_MEMBER_JOINED, "data");
+        handler.pushEvent(ROOM_ID, USER1_ID, CardRoomEventType.MEMBER_JOINED, "data");
 
         verify(session1, never()).sendMessage(any());
         verify(session2).sendMessage(any(TextMessage.class));
@@ -120,7 +121,7 @@ class CardWebSocketHandlerTest {
     void pushPayload_shouldContainTypeRoomIdAndData() throws Exception {
         handler.afterConnectionEstablished(session1);
 
-        handler.pushEvent(ROOM_ID, null, CardWebSocketHandler.EVENT_ROUND_CREATED,
+        handler.pushEvent(ROOM_ID, null, CardRoomEventType.ROUND_CREATED,
                 Map.of("score", 5));
 
         ArgumentCaptor<TextMessage> captor = ArgumentCaptor.forClass(TextMessage.class);

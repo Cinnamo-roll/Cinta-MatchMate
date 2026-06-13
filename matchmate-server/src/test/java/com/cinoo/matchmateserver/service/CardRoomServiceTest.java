@@ -3,6 +3,7 @@ package com.cinoo.matchmateserver.service;
 import com.cinoo.matchmateserver.cache.CacheInvalidationService;
 import com.cinoo.matchmateserver.common.ErrorCode;
 import com.cinoo.matchmateserver.constant.CardConstant;
+import com.cinoo.matchmateserver.constant.CardRoomEventType;
 import com.cinoo.matchmateserver.exception.BusinessException;
 import com.cinoo.matchmateserver.mapper.*;
 import com.cinoo.matchmateserver.model.domain.*;
@@ -12,6 +13,13 @@ import com.cinoo.matchmateserver.model.vo.CardRoomVO;
 import com.cinoo.matchmateserver.model.vo.UserVO;
 import com.cinoo.matchmateserver.service.assembler.CardRoomViewAssembler;
 import com.cinoo.matchmateserver.service.impl.CardRoomServiceImpl;
+import com.cinoo.matchmateserver.service.support.CardRoomAccessGuard;
+import com.cinoo.matchmateserver.service.support.CardLedgerWriteProcessor;
+import com.cinoo.matchmateserver.service.support.CardRedisLockExecutor;
+import com.cinoo.matchmateserver.service.support.CardRoomEventPublisher;
+import com.cinoo.matchmateserver.service.support.CardRoomLifecycleProcessor;
+import com.cinoo.matchmateserver.service.support.CardRoomUndoCoordinator;
+import com.cinoo.matchmateserver.service.support.CardRoomUndoProcessor;
 import com.cinoo.matchmateserver.websocket.CardWebSocketHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +45,7 @@ class CardRoomServiceTest {
     private static final long OWNER_ID = 1L;
     private static final long OTHER_ID = 2L;
     private static final long OTHER2_ID = 3L;
+    private static final long OTHER3_ID = 4L;
 
     @Mock private CardRoomMapper cardRoomMapper;
     @Mock private CardRoomMemberMapper cardRoomMemberMapper;
@@ -70,13 +79,58 @@ class CardRoomServiceTest {
                 cardUndoApprovalMapper,
                 userMapper
         );
-        cardRoomService = new CardRoomServiceImpl(
-                cardRoomMapper, cardRoomMemberMapper, cardRoundMapper,
+        CardRoomAccessGuard cardRoomAccessGuard = new CardRoomAccessGuard(
+                cardRoomMapper,
+                cardRoomMemberMapper
+        );
+        CardRoomEventPublisher cardRoomEventPublisher = new CardRoomEventPublisher(cardWebSocketHandler);
+        CardRoomUndoProcessor cardRoomUndoProcessor = new CardRoomUndoProcessor(
+                cardRoomMemberMapper,
+                cardRoundMapper,
                 cardRoundScoreMapper,
-                cardFundRecordMapper, cardFundParticipantMapper,
-                cardUndoRequestMapper, cardUndoApprovalMapper,
-                userMapper, userService, dataRetentionService, cacheInvalidationService,
-                cardRoomViewAssembler, redissonClient, cardWebSocketHandler
+                cardFundRecordMapper,
+                cardFundParticipantMapper,
+                cardUndoRequestMapper,
+                cardUndoApprovalMapper,
+                cardRoomAccessGuard
+        );
+        CardRedisLockExecutor cardRedisLockExecutor = new CardRedisLockExecutor(redissonClient);
+        CardLedgerWriteProcessor cardLedgerWriteProcessor = new CardLedgerWriteProcessor(
+                cardRoomMapper,
+                cardRoomMemberMapper,
+                cardRoundMapper,
+                cardRoundScoreMapper,
+                cardFundRecordMapper,
+                cardFundParticipantMapper,
+                cardRedisLockExecutor,
+                cardRoomAccessGuard
+        );
+        CardRoomLifecycleProcessor cardRoomLifecycleProcessor = new CardRoomLifecycleProcessor(
+                cardRoomMapper,
+                cardRoomMemberMapper,
+                userMapper,
+                userService,
+                dataRetentionService,
+                cacheInvalidationService,
+                cardRoomViewAssembler,
+                cardRedisLockExecutor,
+                cardRoomEventPublisher,
+                cardRoomAccessGuard
+        );
+        CardRoomUndoCoordinator cardRoomUndoCoordinator = new CardRoomUndoCoordinator(
+                cardRoundMapper,
+                cardRoundScoreMapper,
+                cardFundRecordMapper,
+                cardFundParticipantMapper,
+                cardRoomViewAssembler,
+                cardRoomEventPublisher,
+                cardRoomUndoProcessor,
+                cardRoomAccessGuard
+        );
+        cardRoomService = new CardRoomServiceImpl(
+                cardRoomMapper, userMapper, userService,
+                cardRoomViewAssembler, cardRoomAccessGuard, cardLedgerWriteProcessor, cardRoomEventPublisher,
+                cardRoomLifecycleProcessor, cardRoomUndoCoordinator
         );
 
         User owner = new User();
@@ -86,6 +140,13 @@ class CardRoomServiceTest {
         other.setId(OTHER_ID);
         other.setUsername("成员1");
 
+        User other2 = new User();
+        other2.setId(OTHER2_ID);
+        other2.setUsername("member-2");
+        User other3 = new User();
+        other3.setId(OTHER3_ID);
+        other3.setUsername("member-3");
+
         ownerRequest = new MockHttpServletRequest();
         ownerRequest.getSession(true).setAttribute("userLoginState", OWNER_ID);
         otherRequest = new MockHttpServletRequest();
@@ -94,6 +155,8 @@ class CardRoomServiceTest {
         // loginUser uses userMapper.selectById——return correct user
         lenient().when(userMapper.selectById(OWNER_ID)).thenReturn(owner);
         lenient().when(userMapper.selectById(OTHER_ID)).thenReturn(other);
+        lenient().when(userMapper.selectById(OTHER2_ID)).thenReturn(other2);
+        lenient().when(userMapper.selectById(OTHER3_ID)).thenReturn(other3);
         lenient().when(userService.getLoginUser(ownerRequest)).thenReturn(owner);
         lenient().when(userService.getLoginUser(otherRequest)).thenReturn(other);
         lenient().when(userService.toUserVO(any(User.class))).thenAnswer(inv -> {
@@ -351,6 +414,8 @@ class CardRoomServiceTest {
         verify(cardRoundMapper, never()).insert(any(CardRound.class));
     }
 
+    // ── 资金平摊 ──
+
     @Test
     void addFund_oneYuan_shouldStoreOneHundredCentsAndKeepCreatorBalance() {
         CardRoom room = mockActiveRoom();
@@ -390,9 +455,54 @@ class CardRoomServiceTest {
         verify(cardWebSocketHandler).pushEvent(
                 eq(room.getId()),
                 eq(OWNER_ID),
-                eq(CardWebSocketHandler.EVENT_FUND_CREATED),
+                eq(CardRoomEventType.FUND_CREATED),
                 any());
     }
+
+    @Test
+    void addFund_fortyYuan_shouldSplitAmongFourPeople() {
+        CardRoom room = mockActiveRoom();
+        CardRoomMember owner = makeMember(room.getId(), OWNER_ID, 0);
+        CardRoomMember other = makeMember(room.getId(), OTHER_ID, 0);
+        CardRoomMember other2 = makeMember(room.getId(), OTHER2_ID, 0);
+        CardRoomMember other3 = makeMember(room.getId(), OTHER3_ID, 0);
+        AtomicReference<CardFundRecord> savedFund = new AtomicReference<>();
+        AtomicReference<List<CardFundParticipant>> savedParticipants =
+                new AtomicReference<>(List.of());
+        AddFundRequest request = new AddFundRequest();
+        request.setType(CardConstant.FUND_TYPE_ADD);
+        request.setAmount(BigDecimal.valueOf(40));
+        request.setParticipantIds(List.of(OTHER_ID, OTHER2_ID, OTHER3_ID));
+
+        when(cardRoomMemberMapper.selectOne(any())).thenReturn(owner);
+        when(cardRoomMapper.selectActiveMemberIds(room.getId()))
+                .thenReturn(List.of(OWNER_ID, OTHER_ID, OTHER2_ID, OTHER3_ID));
+        when(cardFundRecordMapper.insert(any(CardFundRecord.class))).thenAnswer(invocation -> {
+            CardFundRecord fund = invocation.getArgument(0);
+            fund.setId(41L);
+            savedFund.set(fund);
+            return 1;
+        });
+        when(cardFundParticipantMapper.insertBatch(anyList())).thenAnswer(invocation -> {
+            savedParticipants.set(invocation.getArgument(0));
+            return 3;
+        });
+        when(cardFundRecordMapper.selectByRoomId(eq(room.getId()), anyInt()))
+                .thenAnswer(invocation -> List.of(savedFund.get()));
+        when(cardFundParticipantMapper.selectByFundIds(anyList()))
+                .thenAnswer(invocation -> savedParticipants.get());
+        configureRoomView(room, List.of(owner, other, other2, other3));
+
+        CardRoomVO result = cardRoomService.addFund(room.getId(), request, ownerRequest);
+
+        assertEquals(4000, savedFund.get().getAmount());
+        assertEquals(3000, result.getFundBalance());
+        assertEquals(
+                List.of(OTHER_ID, OTHER2_ID, OTHER3_ID),
+                savedParticipants.get().stream().map(CardFundParticipant::getUserId).toList());
+    }
+
+    // ── 撤销记录 ──
 
     @Test
     void requestRoundUndo_notCreator_shouldThrow() {
@@ -412,6 +522,68 @@ class CardRoomServiceTest {
 
         assertEquals(ErrorCode.NO_AUTH.getCode(), exception.getCode());
         verify(cardUndoRequestMapper, never()).insert(any(CardUndoRequest.class));
+    }
+
+    @Test
+    void approveUndo_allParticipantsApproved_shouldRevertRound() {
+        CardRoom room = mockActiveRoom();
+        CardRoomMember owner = makeMember(room.getId(), OWNER_ID, 0);
+        owner.setId(11L);
+        CardRoomMember other = makeMember(room.getId(), OTHER_ID, 0);
+        other.setId(12L);
+        CardRound round = new CardRound();
+        round.setId(30L);
+        round.setRoomId(room.getId());
+        round.setCreatorId(OWNER_ID);
+        round.setRoundNo(1);
+        CardRoundScore ownerScore = new CardRoundScore();
+        ownerScore.setRoundId(round.getId());
+        ownerScore.setUserId(OWNER_ID);
+        ownerScore.setScore(-5);
+        CardRoundScore otherScore = new CardRoundScore();
+        otherScore.setRoundId(round.getId());
+        otherScore.setUserId(OTHER_ID);
+        otherScore.setScore(5);
+        List<CardRoundScore> scores = List.of(ownerScore, otherScore);
+        CardUndoRequest undo = new CardUndoRequest();
+        undo.setId(70L);
+        undo.setRoomId(room.getId());
+        undo.setTargetType(CardConstant.UNDO_TARGET_ROUND);
+        undo.setTargetId(round.getId());
+        undo.setRequesterId(OWNER_ID);
+        undo.setStatus(CardConstant.UNDO_STATUS_PENDING);
+
+        when(cardRoomMemberMapper.selectOne(any())).thenReturn(owner, other, owner, other);
+        when(cardRoundMapper.selectById(round.getId())).thenReturn(round);
+        when(cardRoundScoreMapper.selectByRoundId(round.getId())).thenReturn(scores);
+        when(cardUndoRequestMapper.insert(any(CardUndoRequest.class))).thenAnswer(invocation -> {
+            CardUndoRequest request = invocation.getArgument(0);
+            request.setId(undo.getId());
+            return 1;
+        });
+        when(cardUndoRequestMapper.selectPending(
+                eq(room.getId()),
+                eq(CardConstant.UNDO_TARGET_ROUND),
+                eq(round.getId())))
+                .thenReturn(null, undo, undo);
+        when(cardUndoRequestMapper.selectById(undo.getId())).thenReturn(undo);
+        when(cardUndoApprovalMapper.countByRequestId(undo.getId())).thenReturn(1, 2);
+        when(cardRoundMapper.selectByRoomId(eq(room.getId()), anyInt()))
+                .thenReturn(List.of(round), List.of());
+        when(cardRoundScoreMapper.selectByRoundIds(anyList())).thenReturn(scores);
+        configureRoomView(room, List.of(owner, other));
+
+        cardRoomService.requestRoundUndo(room.getId(), round.getId(), ownerRequest);
+
+        verify(cardRoundMapper, never()).deleteById(round.getId());
+
+        cardRoomService.approveUndo(room.getId(), undo.getId(), otherRequest);
+
+        verify(cardRoomMemberMapper).updateScoreIncrement(owner.getId(), 5);
+        verify(cardRoomMemberMapper).updateScoreIncrement(other.getId(), -5);
+        verify(cardRoundScoreMapper).deleteByRoundId(round.getId());
+        verify(cardRoundMapper).deleteById(round.getId());
+        verify(cardUndoRequestMapper).markDone(undo.getId());
     }
 
     @Test
@@ -478,7 +650,7 @@ class CardRoomServiceTest {
         assertEquals(CardConstant.ROOM_STATUS_ENDED, room.getStatus());
 
         // 验证 WS 推送
-        verify(cardWebSocketHandler).pushEvent(eq(room.getId()), any(), eq(CardWebSocketHandler.EVENT_ROOM_CLOSED), any());
+        verify(cardWebSocketHandler).pushEvent(eq(room.getId()), any(), eq(CardRoomEventType.ROOM_CLOSED), any());
     }
 
     // ── Helpers ──
