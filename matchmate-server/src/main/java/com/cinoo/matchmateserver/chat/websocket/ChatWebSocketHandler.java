@@ -85,13 +85,20 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                     new PushPayload(type, data)
             );
             session.sendMessage(new TextMessage(payload));
-        } catch (IOException e) {
+        } catch (Exception e) {
             log.warn("Failed to push {} notice to user {}", type, userId, e);
         } finally {
             try {
                 session.close(CloseStatus.POLICY_VIOLATION);
-            } catch (IOException e) {
+            } catch (Exception e) {
                 log.warn("Failed to disconnect user {}", userId, e);
+            }
+            if (sessionManager.remove(userId, session)) {
+                try {
+                    onlineUserService.userOffline(userId);
+                } catch (RuntimeException e) {
+                    log.warn("Failed to clear online state for disconnected user {}", userId, e);
+                }
             }
         }
     }

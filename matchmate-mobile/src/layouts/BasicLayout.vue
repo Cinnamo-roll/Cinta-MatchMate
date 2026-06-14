@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useNotify } from '../composables/useNotify';
 import { useWebSocket } from '../composables/useWebSocket';
-import { getCurrentUser, logout } from '../api/matchmate';
+import { clearCurrentUserCache, getCurrentUser, logout } from '../api/matchmate';
 import type { WsPushPayload } from '../models/chat';
 
 type TabName = 'index' | 'discover' | 'message' | 'user';
@@ -88,6 +88,7 @@ const syncWebSocket = async () => {
 const handleWsMessage = (payload: WsPushPayload) => {
   if (payload.type !== 'account_banned' && payload.type !== 'login_taken_over') return;
   forceDisconnect();
+  clearCurrentUserCache();
   void logout().catch(() => undefined);
   showNotify(payload.data.message || '当前登录状态已失效，请重新登录');
   router.replace('/login');

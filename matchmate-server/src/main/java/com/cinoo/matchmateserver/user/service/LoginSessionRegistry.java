@@ -2,6 +2,7 @@ package com.cinoo.matchmateserver.user.service;
 
 import com.cinoo.matchmateserver.user.constant.UserConstant;
 import jakarta.servlet.http.HttpSession;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
@@ -12,6 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Tracks the current active HTTP session for each user.
  */
 @Service
+@Slf4j
 public class LoginSessionRegistry {
 
     private final Map<Long, HttpSession> userSessions = new ConcurrentHashMap<>();
@@ -39,9 +41,14 @@ public class LoginSessionRegistry {
         if (!isActive(existingSession) || Objects.equals(existingSession.getId(), currentSessionId)) {
             return;
         }
+        String existingSessionId = safeSessionId(existingSession);
         userSessions.remove(userId, existingSession);
-        sessionUsers.remove(existingSession.getId());
-        existingSession.invalidate();
+        sessionUsers.remove(existingSessionId);
+        try {
+            existingSession.invalidate();
+        } catch (IllegalStateException e) {
+            log.debug("Login session was already invalidated, sessionId={}", existingSessionId, e);
+        }
     }
 
     public void remove(HttpSession session) {

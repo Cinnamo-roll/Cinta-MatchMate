@@ -97,9 +97,12 @@ export const logout = async () => {
   }
 };
 
-export const getCurrentUser = () => {
-  if (cachedCurrentUser && Date.now() - cachedCurrentUserAt < CURRENT_USER_CACHE_TTL) {
+export const getCurrentUser = (forceRefresh = false) => {
+  if (!forceRefresh && cachedCurrentUser && Date.now() - cachedCurrentUserAt < CURRENT_USER_CACHE_TTL) {
     return Promise.resolve(cachedCurrentUser);
+  }
+  if (forceRefresh) {
+    currentUserRequest = null;
   }
   if (!currentUserRequest) {
     currentUserRequest = myAxios

@@ -33,7 +33,7 @@ const loadData = async () => {
   loginRequired.value = false;
   checking.value = true;
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUser(true);
     currentUser.value = user;
     const active = await getActiveRoom();
     if (active) {

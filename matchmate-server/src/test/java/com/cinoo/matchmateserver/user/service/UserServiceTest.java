@@ -289,6 +289,67 @@ class UserServiceTest {
     }
 
     @Test
+    void forceLoginStillSucceedsWhenOldDeviceNoticeFails() {
+        User user = activeUser();
+        user.setUserPassword(passwordService.encode(PASSWORD));
+        when(userMapper.selectOne(any())).thenReturn(user);
+        when(tagService.getUserTagNames(user.getId())).thenReturn(List.of());
+        doThrow(new IllegalStateException("websocket closed"))
+                .when(chatWebSocketHandler)
+                .pushLoginTakenOverAndDisconnect(eq(user.getId()), anyString());
+
+        MockHttpServletRequest firstRequest = new MockHttpServletRequest();
+        userService.doLogin(ACCOUNT, PASSWORD, false, firstRequest);
+        var firstSession = firstRequest.getSession(false);
+
+        MockHttpServletRequest takeoverRequest = new MockHttpServletRequest();
+        UserVO result = userService.doLogin(ACCOUNT, PASSWORD, true, takeoverRequest);
+
+        assertEquals(user.getId(), result.getId());
+        assertThrows(
+                IllegalStateException.class,
+                () -> firstSession.getAttribute(UserConstant.USER_LOGIN_STATE)
+        );
+        assertEquals(
+                user.getId(),
+                takeoverRequest.getSession(false).getAttribute(UserConstant.USER_LOGIN_STATE)
+        );
+        verify(onlineUserService).userOffline(user.getId());
+    }
+
+    @Test
+    void forceLoginStillSucceedsWhenOnlineStateCleanupFails() {
+        User user = activeUser();
+        user.setUserPassword(passwordService.encode(PASSWORD));
+        when(userMapper.selectOne(any())).thenReturn(user);
+        when(tagService.getUserTagNames(user.getId())).thenReturn(List.of());
+        doThrow(new IllegalStateException("redis unavailable"))
+                .when(onlineUserService)
+                .userOffline(user.getId());
+
+        MockHttpServletRequest firstRequest = new MockHttpServletRequest();
+        userService.doLogin(ACCOUNT, PASSWORD, false, firstRequest);
+        var firstSession = firstRequest.getSession(false);
+
+        MockHttpServletRequest takeoverRequest = new MockHttpServletRequest();
+        UserVO result = userService.doLogin(ACCOUNT, PASSWORD, true, takeoverRequest);
+
+        assertEquals(user.getId(), result.getId());
+        assertThrows(
+                IllegalStateException.class,
+                () -> firstSession.getAttribute(UserConstant.USER_LOGIN_STATE)
+        );
+        assertEquals(
+                user.getId(),
+                takeoverRequest.getSession(false).getAttribute(UserConstant.USER_LOGIN_STATE)
+        );
+        verify(chatWebSocketHandler).pushLoginTakenOverAndDisconnect(
+                eq(user.getId()),
+                contains("其他设备登录")
+        );
+    }
+
+    @Test
     void getLoginUserReloadsLatestUser() {
         User user = activeUser();
         when(userMapper.selectById(user.getId())).thenReturn(user);

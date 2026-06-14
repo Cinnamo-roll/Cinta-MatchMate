@@ -158,12 +158,9 @@ public class UserServiceImpl implements UserService {
                         "该账号已在其他设备保持登录，是否继续登录并使原设备下线？"
                 );
             }
+            notifyLoginTakenOver(user.getId());
             loginSessionRegistry.invalidateOtherSession(user.getId(), currentSessionId);
-            chatWebSocketHandler.pushLoginTakenOverAndDisconnect(
-                    user.getId(),
-                    "你的账号已在其他设备登录，当前设备已安全下线"
-            );
-            onlineUserService.userOffline(user.getId());
+            clearOnlineStateAfterTakeover(user.getId());
         }
 
         HttpSession session = saveLoginState(request, user.getId());
@@ -737,6 +734,25 @@ public class UserServiceImpl implements UserService {
         }
         Object loginState = session.getAttribute(UserConstant.USER_LOGIN_STATE);
         return loginState instanceof Long userId ? userId : null;
+    }
+
+    private void notifyLoginTakenOver(Long userId) {
+        try {
+            chatWebSocketHandler.pushLoginTakenOverAndDisconnect(
+                    userId,
+                    "你的账号已在其他设备登录，当前设备已安全下线"
+            );
+        } catch (RuntimeException e) {
+            log.warn("Failed to notify old device about login takeover, userId={}", userId, e);
+        }
+    }
+
+    private void clearOnlineStateAfterTakeover(Long userId) {
+        try {
+            onlineUserService.userOffline(userId);
+        } catch (RuntimeException e) {
+            log.warn("Failed to clear online state after login takeover, userId={}", userId, e);
+        }
     }
 
     private void validatePageParameters(long pageNum, long pageSize) {
