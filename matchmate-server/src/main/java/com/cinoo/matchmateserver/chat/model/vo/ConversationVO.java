@@ -22,6 +22,12 @@ public class ConversationVO implements Serializable {
 
     private Date lastMessageTime;
 
+    private Long lastMessageSenderId;
+
+    private Long lastMessageReceiverId;
+
+    private Integer lastMessageStatus;
+
     private Long unreadCount;
 
     private Boolean isOnline;

@@ -16,3 +16,10 @@ export type User = {
   losses: number;
   winRate: number;
 };
+
+export type UserRecommendation = {
+  user: User;
+  score: number;
+  reason: string;
+  commonTags: string[];
+};

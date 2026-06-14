@@ -45,7 +45,7 @@ const submitLogin = async () => {
 
 <template>
   <div class="auth-page">
-    <van-icon name="contact-o" size="56" color="#1989fa" />
+    <van-icon name="contact-o" size="56" color="var(--app-primary)" />
     <h2>登录 MatchMate</h2>
     <p>账号不区分大小写</p>
 
@@ -53,6 +53,7 @@ const submitLogin = async () => {
       v-model="loginForm.userAccount"
       label="账号"
       placeholder="请输入账号"
+      autocomplete="username"
       clearable
     />
     <van-field
@@ -60,6 +61,7 @@ const submitLogin = async () => {
       type="password"
       label="密码"
       placeholder="请输入密码"
+      autocomplete="current-password"
       clearable
       @keyup.enter="submitLogin"
     />

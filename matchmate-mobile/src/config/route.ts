@@ -1,54 +1,65 @@
-import Index from '../pages/Index.vue';
-import Login from '../pages/Login.vue';
-import Register from '../pages/Register.vue';
-import Search from '../pages/Search.vue';
-import Team from '../pages/Team.vue';
-import User from '../pages/User.vue';
-import ChatDetail from '../pages/ChatDetail.vue';
-import Discover from '../pages/Discover.vue';
-import CardLedger from '../pages/CardLedger.vue';
-import CardRoom from '../pages/CardRoom.vue';
-import AdminUsers from '../pages/AdminUsers.vue';
+import type { RouteRecordRaw } from 'vue-router';
 
-const routes = [
-  { path: '/', component: Index, meta: { title: 'MatchMate' } },
-  { path: '/discover', component: Discover, meta: { title: '发现' } },
-  { path: '/team', component: Team, meta: { title: '消息' } },
-  { path: '/user', component: User, meta: { title: '我的' } },
+const routes: RouteRecordRaw[] = [
+  {
+    path: '/',
+    component: () => import('../pages/Index.vue'),
+    meta: { title: 'MatchMate', lockScroll: true },
+  },
+  {
+    path: '/discover',
+    component: () => import('../pages/Discover.vue'),
+    meta: { title: '发现' },
+  },
+  {
+    path: '/team',
+    component: () => import('../pages/Team.vue'),
+    meta: { title: '消息', lockScroll: true },
+  },
+  {
+    path: '/user',
+    component: () => import('../pages/User.vue'),
+    meta: { title: '我的' },
+  },
   {
     path: '/discover/card-ledger',
-    component: CardLedger,
-    meta: { title: '打牌记账本', showBack: true, hideTabbar: true },
+    component: () => import('../pages/CardLedger.vue'),
+    meta: { title: '打牌记账本', showBack: true, hideTabbar: true, lockScroll: true },
   },
   {
     path: '/card-room/:id',
-    component: CardRoom,
-    meta: { title: '房间', showBack: true, hideTabbar: true },
+    component: () => import('../pages/CardRoom.vue'),
+    meta: { title: '房间', showBack: true, hideTabbar: true, lockScroll: true },
   },
   {
     path: '/chat/:id',
-    component: ChatDetail,
+    component: () => import('../pages/ChatDetail.vue'),
     meta: { title: '聊天', hideNavbar: true, hideTabbar: true, lockScroll: true },
   },
   {
     path: '/search',
-    component: Search,
-    meta: { title: '搜索伙伴', showBack: true, hideTabbar: true },
+    component: () => import('../pages/Search.vue'),
+    meta: { title: '搜索伙伴', showBack: true, hideTabbar: true, lockScroll: true },
   },
   {
     path: '/admin/users',
-    component: AdminUsers,
+    component: () => import('../pages/AdminUsers.vue'),
     meta: { title: '用户管理', showBack: true, hideTabbar: true },
   },
   {
     path: '/login',
-    component: Login,
-    meta: { title: '登录', tabbar: 'user', lockScroll: true },
+    component: () => import('../pages/Login.vue'),
+    meta: { title: '登录', lockScroll: true },
   },
   {
     path: '/register',
-    component: Register,
+    component: () => import('../pages/Register.vue'),
     meta: { title: '注册', showBack: true, hideTabbar: true, lockScroll: true },
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    component: () => import('../pages/NotFound.vue'),
+    meta: { title: '页面不存在', hideTabbar: true },
   },
 ];
 

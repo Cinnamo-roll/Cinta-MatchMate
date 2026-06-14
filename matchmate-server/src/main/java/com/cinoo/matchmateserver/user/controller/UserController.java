@@ -13,6 +13,7 @@ import com.cinoo.matchmateserver.user.model.request.DeleteAccountRequest;
 import com.cinoo.matchmateserver.user.model.request.UpdateUserProfileRequest;
 import com.cinoo.matchmateserver.user.model.request.UpdatePasswordRequest;
 import com.cinoo.matchmateserver.user.model.request.UpdateUserStatusRequest;
+import com.cinoo.matchmateserver.user.model.vo.UserRecommendationVO;
 import com.cinoo.matchmateserver.user.model.vo.UserVO;
 import com.cinoo.matchmateserver.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -133,17 +134,26 @@ public class UserController {
 
     @Operation(summary = "用户搜索", description = "用户搜索接口")
     @GetMapping("/search/tags")
-    public BaseResponse<List<UserVO>> searchUsersByTags(
+    public BaseResponse<PageResponse<UserVO>> searchUsersByTags(
             @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) List<String> tagList) {
-        return ResultUtils.success(userService.searchUserByTags(keyword, tagList));
+            @RequestParam(required = false) List<String> tagList,
+            @RequestParam(defaultValue = "1") long pageNum,
+            @RequestParam(defaultValue = "10") long pageSize,
+            HttpServletRequest request) {
+        return ResultUtils.success(
+                userService.searchUserByTags(keyword, tagList, pageNum, pageSize, request)
+        );
     }
 
     @Operation(summary = "推荐用户", description = "随机推荐用户，默认8人")
     @GetMapping("/recommend")
-    public BaseResponse<List<UserVO>> recommendUsers(
-            @RequestParam(defaultValue = "8") int limit) {
-        return ResultUtils.success(userService.recommendUsers(limit));
+    public BaseResponse<PageResponse<UserRecommendationVO>> recommendUsers(
+            @RequestParam(defaultValue = "1") long pageNum,
+            @RequestParam(defaultValue = "10") long pageSize,
+            HttpServletRequest request) {
+        return ResultUtils.success(
+                userService.recommendUsers(pageNum, pageSize, request)
+        );
     }
 
     @Operation(summary = "更新个人标签", description = "替换当前登录用户的全部标签，最多 3 个")

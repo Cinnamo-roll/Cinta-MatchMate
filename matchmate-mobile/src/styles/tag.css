@@ -5,17 +5,26 @@
 }
 
 .tag-option {
+  min-height: 34px;
   padding: 7px 13px;
-  color: #646566;
+  color: var(--app-text-secondary);
   font-size: 14px;
-  background: #f2f3f5;
+  background: var(--app-surface-muted);
   border: 1px solid transparent;
-  border-radius: 16px;
+  border-radius: var(--app-pill-radius);
   cursor: pointer;
+  transition:
+    color var(--app-duration-fast) ease,
+    background-color var(--app-duration-fast) ease,
+    transform var(--app-duration-fast) var(--app-ease);
 }
 
 .tag-option.selected {
-  color: #1989fa;
-  background: #ecf9ff;
-  border-color: #1989fa;
+  color: var(--app-primary);
+  background: var(--app-primary-soft);
+  border-color: rgb(89 104 233 / 35%);
+}
+
+.tag-option:active {
+  transform: scale(.97);
 }

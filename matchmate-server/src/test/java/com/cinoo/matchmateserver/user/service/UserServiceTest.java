@@ -1,14 +1,16 @@
 package com.cinoo.matchmateserver.user.service;
 
 import com.cinoo.matchmateserver.infrastructure.cache.CacheInvalidationService;
-import com.cinoo.matchmateserver.infrastructure.cache.CacheNames;
 import com.cinoo.matchmateserver.infrastructure.cache.DistributedCacheService;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.cinoo.matchmateserver.common.ErrorCode;
+import com.cinoo.matchmateserver.common.PageResponse;
 import com.cinoo.matchmateserver.user.constant.UserConstant;
 import com.cinoo.matchmateserver.exception.BusinessException;
 import com.cinoo.matchmateserver.user.mapper.UserMapper;
 import com.cinoo.matchmateserver.user.model.entity.User;
 import com.cinoo.matchmateserver.user.model.request.UpdateUserProfileRequest;
+import com.cinoo.matchmateserver.user.model.vo.UserRecommendationVO;
 import com.cinoo.matchmateserver.user.model.vo.UserVO;
 import com.cinoo.matchmateserver.user.service.UserServiceImpl;
 import com.cinoo.matchmateserver.infrastructure.oss.OssUtils;
@@ -201,47 +203,111 @@ class UserServiceTest {
     @Test
     void searchUsesKeywordAndAllSelectedTags() {
         User user = activeUser();
-        when(userMapper.searchByKeywordAndTags("test", List.of("Java", "跑步"), 2))
-                .thenReturn(List.of(user));
+        Page<User> userPage = new Page<>(1, 10);
+        userPage.setRecords(List.of(user));
+        userPage.setTotal(1);
+        when(userMapper.searchPageByKeywordAndTags(
+                any(Page.class),
+                eq("test"),
+                eq(List.of("Java", "跑步")),
+                eq(2),
+                eq(99L),
+                eq(UserConstant.ADMIN_ROLE)
+        )).thenReturn(userPage);
         when(tagService.getUserTagNames(user.getId())).thenReturn(List.of("Java", "跑步"));
 
-        List<UserVO> result = userService.searchUserByTags(
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.getSession().setAttribute(UserConstant.USER_LOGIN_STATE, 99L);
+        PageResponse<UserVO> result = userService.searchUserByTags(
                 " test ",
-                List.of("Java", "跑步", "Java")
+                List.of("Java", "跑步", "Java"),
+                1,
+                10,
+                request
         );
 
-        assertEquals(1, result.size());
-        assertEquals(List.of("Java", "跑步"), result.get(0).getUserTags());
-        verify(userMapper).searchByKeywordAndTags("test", List.of("Java", "跑步"), 2);
-        verify(cacheService, never()).get(
-                eq(CacheNames.USER_SEARCHES),
-                anyString(),
-                any()
+        assertEquals(1, result.getTotal());
+        assertEquals(List.of("Java", "跑步"), result.getRecords().get(0).getUserTags());
+        verify(userMapper).searchPageByKeywordAndTags(
+                any(Page.class),
+                eq("test"),
+                eq(List.of("Java", "跑步")),
+                eq(2),
+                eq(99L),
+                eq(UserConstant.ADMIN_ROLE)
         );
     }
 
     @Test
-    void emptySearchUsesSharedCache() {
-        when(userMapper.searchByKeywordAndTags(null, List.of(), 0)).thenReturn(List.of());
+    void emptySearchUsesRequestedPage() {
+        Page<User> userPage = new Page<>(2, 10);
+        when(userMapper.searchPageByKeywordAndTags(
+                any(Page.class),
+                isNull(),
+                eq(List.of()),
+                eq(0),
+                isNull(),
+                eq(UserConstant.ADMIN_ROLE)
+        )).thenReturn(userPage);
 
-        userService.searchUserByTags("", List.of());
-
-        verify(cacheService).get(
-                eq(CacheNames.USER_SEARCHES),
-                anyString(),
-                any()
+        PageResponse<UserVO> result = userService.searchUserByTags(
+                "",
+                List.of(),
+                2,
+                10,
+                new MockHttpServletRequest()
         );
+
+        assertEquals(2, result.getPageNum());
+        assertTrue(result.getRecords().isEmpty());
     }
 
     @Test
     void recommendationRejectsUnboundedLimit() {
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> userService.recommendUsers(51)
+                () -> userService.recommendUsers(
+                        1,
+                        101,
+                        new MockHttpServletRequest()
+                )
         );
 
         assertEquals(ErrorCode.PARAM_ERROR.getCode(), exception.getCode());
         verifyNoInteractions(userMapper);
+    }
+
+    @Test
+    void recommendationRanksCommonTagsBeforeOnlineOnly() {
+        User commonTagUser = activeUser();
+        commonTagUser.setId(2L);
+        commonTagUser.setUserAccount("javafan");
+        commonTagUser.setUsername("Java Fan");
+        User onlineOnlyUser = activeUser();
+        onlineOnlyUser.setId(3L);
+        onlineOnlyUser.setUserAccount("runner");
+        onlineOnlyUser.setUsername("Runner");
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.getSession().setAttribute(UserConstant.USER_LOGIN_STATE, 1L);
+        when(tagService.getUserTagNames(1L)).thenReturn(List.of("Java"));
+        when(tagService.getUserTagNames(2L)).thenReturn(List.of("Java", "音乐"));
+        when(tagService.getUserTagNames(3L)).thenReturn(List.of("跑步"));
+        when(onlineUserService.isOnline(2L)).thenReturn(false);
+        when(onlineUserService.isOnline(3L)).thenReturn(true);
+        when(userMapper.selectRecommendationCandidates(1L, 200))
+                .thenReturn(List.of(onlineOnlyUser, commonTagUser));
+
+        PageResponse<UserRecommendationVO> result = userService.recommendUsers(
+                1,
+                10,
+                request
+        );
+
+        assertEquals(2, result.getTotal());
+        assertEquals(2L, result.getRecords().get(0).getUser().getId());
+        assertEquals(List.of("Java"), result.getRecords().get(0).getCommonTags());
+        assertTrue(result.getRecords().get(0).getReason().contains("Java"));
     }
 
     @Test
@@ -250,7 +316,10 @@ class UserServiceTest {
                 BusinessException.class,
                 () -> userService.searchUserByTags(
                         "",
-                        List.of("Java", "跑步", "摄影", "电影")
+                        List.of("Java", "跑步", "摄影", "电影"),
+                        1,
+                        10,
+                        new MockHttpServletRequest()
                 )
         );
 

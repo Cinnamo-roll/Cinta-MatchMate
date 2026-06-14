@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { MAX_TAGS } from '../utils/user';
 import { useNotify } from '../composables/useNotify';
 import { useTagSelection } from '../composables/useTagSelection';
@@ -7,14 +7,23 @@ import { recommendUsers, searchUsers } from '../api/matchmate';
 import UserCard from '../components/UserCard.vue';
 import type { User } from '../models/user';
 
+const SEARCH_PAGE_SIZE = 10;
+const SEARCH_RECOMMENDATION_LIMIT = 6;
 const keyword = ref('');
 const selectedTags = ref<string[]>([]);
 const users = ref<User[]>([]);
+const recommendationReasons = ref<Record<number, string>>({});
 const showFilter = ref(false);
 const activeCategoryName = ref('');
 const loading = ref(false);
+const finished = ref(false);
+const loadFailed = ref(false);
+const total = ref(0);
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
-let latestRequestId = 0;
+let pageNum = 1;
+let requestInFlight = false;
+let requestGeneration = 0;
+let pendingReset = false;
 
 const { showNotify } = useNotify();
 const { categories, draftTags, loadCategories, isTagSelected: isDraftSelected, toggleTag: toggleDraftTag } = useTagSelection(MAX_TAGS);
@@ -25,44 +34,78 @@ const activeCategory = computed(() =>
   ),
 );
 
-const headerRef = ref<HTMLElement | null>(null);
-const headerHeight = ref(62);
+const isRecommendationMode = () =>
+  !keyword.value.trim() && selectedTags.value.length === 0;
 
-const updateHeaderHeight = () => {
-  nextTick(() => {
-    if (headerRef.value) {
-      headerHeight.value = headerRef.value.offsetHeight;
-    }
-  });
+const appendUniqueUsers = (records: User[]) => {
+  const userMap = new Map(users.value.map((user) => [user.id, user]));
+  records.forEach((user) => userMap.set(user.id, user));
+  users.value = [...userMap.values()];
 };
 
-watch([selectedTags, users], updateHeaderHeight);
+const loadUsers = async (reset = false) => {
+  if (reset) {
+    requestGeneration += 1;
+    pageNum = 1;
+    users.value = [];
+    recommendationReasons.value = {};
+    total.value = 0;
+    finished.value = false;
+    loadFailed.value = false;
+  }
+  if (requestInFlight) {
+    pendingReset = pendingReset || reset;
+    return;
+  }
+  if (finished.value) return;
 
-
-const loadUsers = async () => {
-  const requestId = ++latestRequestId;
+  const generation = requestGeneration;
+  requestInFlight = true;
   try {
     loading.value = true;
-    // TODO: 后期改为基于大数据的智能推荐算法
-    let results: User[];
-    if (!keyword.value.trim() && selectedTags.value.length === 0) {
-      results = await recommendUsers(8);
+    loadFailed.value = false;
+    if (isRecommendationMode()) {
+      const page = await recommendUsers(pageNum, SEARCH_RECOMMENDATION_LIMIT);
+      if (generation !== requestGeneration) return;
+      total.value = Math.min(page.total, SEARCH_RECOMMENDATION_LIMIT);
+      page.records.forEach((item) => {
+        recommendationReasons.value[item.user.id] = item.reason;
+      });
+      appendUniqueUsers(page.records.map((item) => item.user));
+      finished.value = true;
     } else {
-      results = await searchUsers(keyword.value, selectedTags.value);
+      const page = await searchUsers(
+        keyword.value,
+        selectedTags.value,
+        pageNum,
+        SEARCH_PAGE_SIZE,
+      );
+      if (generation !== requestGeneration) return;
+      total.value = page.total;
+      appendUniqueUsers(page.records);
+      finished.value =
+        users.value.length >= page.total || page.records.length < SEARCH_PAGE_SIZE;
     }
-    if (requestId === latestRequestId) {
-      users.value = results;
-    }
+    pageNum += 1;
   } catch {
-    if (requestId === latestRequestId) {
+    if (generation === requestGeneration) {
+      loadFailed.value = true;
       showNotify('搜索失败，请稍后重试');
     }
   } finally {
-    if (requestId === latestRequestId) {
+    requestInFlight = false;
+    if (generation === requestGeneration) {
       loading.value = false;
+    }
+    if (pendingReset) {
+      pendingReset = false;
+      void loadUsers(true);
     }
   }
 };
+
+const resetAndLoad = () => loadUsers(true);
+const retryLoad = () => loadUsers(users.value.length === 0);
 
 const openFilter = () => {
   draftTags.value = [...selectedTags.value];
@@ -72,42 +115,41 @@ const openFilter = () => {
 const applyFilter = () => {
   selectedTags.value = [...draftTags.value];
   showFilter.value = false;
-  loadUsers();
+  resetAndLoad();
 };
 
 const removeSelectedTag = (tag: string) => {
   selectedTags.value = selectedTags.value.filter((item) => item !== tag);
-  loadUsers();
+  resetAndLoad();
 };
 
 const resetSearch = () => {
   keyword.value = '';
   selectedTags.value = [];
   draftTags.value = [];
-  loadUsers();
+  resetAndLoad();
 };
 
 watch(keyword, () => {
   if (searchTimer) clearTimeout(searchTimer);
-  searchTimer = setTimeout(loadUsers, 350);
+  searchTimer = setTimeout(resetAndLoad, 350);
 });
 
 onBeforeUnmount(() => {
-  latestRequestId += 1;
+  requestGeneration += 1;
   if (searchTimer) clearTimeout(searchTimer);
 });
 
 onMounted(async () => {
   await loadCategories();
   activeCategoryName.value = categories.value[0]?.category ?? '';
-  await loadUsers();
-  updateHeaderHeight();
+  await resetAndLoad();
 });
 </script>
 
 <template>
   <div class="search-page">
-    <div ref="headerRef" class="search-header">
+    <div class="search-header">
       <div class="search-toolbar">
         <van-search
           v-model="keyword"
@@ -144,31 +186,60 @@ onMounted(async () => {
       <div class="result-heading">
         <div>
           <strong>{{ keyword.trim() || selectedTags.length ? '匹配结果' : '推荐伙伴' }}</strong>
-          <span>{{ users.length }} 人</span>
+          <span>{{ total }} 人</span>
         </div>
         <p v-if="selectedTags.length > 1">同时匹配全部所选标签</p>
       </div>
     </div>
 
-    <main class="result-area" :style="{ paddingTop: headerHeight + 'px' }">
-      <van-loading v-if="loading" class="page-loading" vertical>
-        搜索中...
-      </van-loading>
-
-      <div v-else-if="users.length > 0" class="user-list">
-        <UserCard
-          v-for="user in users"
-          :key="user.id"
-          :user="user"
-          :highlighted-tags="selectedTags"
-        />
+    <main class="result-area">
+      <div v-if="loading && users.length === 0" class="skeleton-list">
+        <van-skeleton v-for="item in 3" :key="item" avatar title :row="2" />
       </div>
 
-      <van-empty v-else image="search" description="没有找到符合条件的伙伴">
+      <van-empty
+        v-else-if="loadFailed && users.length === 0"
+        image="network"
+        description="加载失败，请检查网络后重试"
+      >
+        <van-button round size="small" type="primary" @click="retryLoad">
+          重新加载
+        </van-button>
+      </van-empty>
+
+      <van-empty
+        v-else-if="!loading && users.length === 0"
+        image="search"
+        description="没有找到符合条件的伙伴"
+      >
         <van-button round size="small" type="primary" @click="resetSearch">
           清空条件
         </van-button>
       </van-empty>
+
+      <van-list
+        v-else
+        v-model:loading="loading"
+        :finished="finished"
+        :immediate-check="false"
+        finished-text="没有更多伙伴啦"
+        @load="loadUsers()"
+      >
+        <div class="user-list">
+          <UserCard
+            v-for="user in users"
+            :key="user.id"
+            :user="user"
+            :highlighted-tags="selectedTags"
+            :recommendation-reason="recommendationReasons[user.id]"
+          />
+        </div>
+
+        <div v-if="loadFailed" class="load-error">
+          <span>这一页加载失败了</span>
+          <button type="button" @click="retryLoad">点此重试</button>
+        </div>
+      </van-list>
     </main>
 
     <van-popup
@@ -254,35 +325,32 @@ onMounted(async () => {
 
 <style scoped>
 .search-page {
-  height: calc(100dvh - var(--van-nav-bar-height, 46px));
-  padding-bottom: 24px;
-  overflow-y: auto;
-  overscroll-behavior-y: none;
-  -webkit-overflow-scrolling: touch;
-  background: #f7f8fa;
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--app-nav-height));
+  min-height: 0;
+  overflow: hidden;
+  background: var(--app-bg);
   box-sizing: border-box;
-  scrollbar-width: none;
-}
-
-.search-page::-webkit-scrollbar {
-  display: none;
 }
 
 .search-header {
-  position: fixed;
-  top: var(--van-nav-bar-height, 46px);
-  right: 0;
-  left: 0;
+  position: relative;
+  flex: 0 0 auto;
   z-index: 99;
-  background: #fff;
+  background: rgb(255 255 255 / 94%);
+  border-bottom: 1px solid var(--app-border);
+  box-shadow: 0 8px 24px rgb(37 45 76 / 4%);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
 .search-toolbar {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
-  background: #fff;
+  padding: 10px var(--app-page-padding);
+  background: transparent;
   box-sizing: border-box;
 }
 
@@ -300,8 +368,8 @@ onMounted(async () => {
   flex-shrink: 0;
   height: 34px;
   padding: 0 10px;
-  color: #323233;
-  background: #f2f3f5;
+  color: var(--app-text);
+  background: var(--app-surface-muted);
   border: 0;
   border-radius: 17px;
 }
@@ -315,7 +383,7 @@ onMounted(async () => {
   color: #fff;
   font-size: 11px;
   font-style: normal;
-  background: #1989fa;
+  background: var(--app-primary);
   border-radius: 9px;
 }
 
@@ -323,8 +391,8 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 4px 12px 10px;
-  background: #fff;
+  padding: 4px var(--app-page-padding) 10px;
+  background: transparent;
 }
 
 .selected-scroll {
@@ -347,9 +415,9 @@ onMounted(async () => {
   gap: 4px;
   flex-shrink: 0;
   padding: 6px 10px;
-  color: #1989fa;
+  color: var(--app-primary);
   font-size: 12px;
-  background: #ecf9ff;
+  background: var(--app-primary-soft);
   border: 0;
   border-radius: 14px;
 }
@@ -357,23 +425,33 @@ onMounted(async () => {
 .clear-button {
   flex-shrink: 0;
   padding: 0;
-  color: #969799;
+  color: var(--app-text-muted);
   font-size: 12px;
   background: transparent;
   border: 0;
 }
 
 .result-area {
-  padding: 0 12px 16px;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 14px var(--app-page-padding) calc(24px + var(--app-safe-bottom));
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
   box-sizing: border-box;
+  scrollbar-width: none;
+}
+
+.result-area::-webkit-scrollbar {
+  display: none;
 }
 
 .result-heading {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  padding: 10px 12px 6px;
-  background: #fff;
+  padding: 10px var(--app-page-padding) 8px;
+  background: transparent;
 }
 
 .result-heading strong {
@@ -383,7 +461,7 @@ onMounted(async () => {
 
 .result-heading span,
 .result-heading p {
-  color: #969799;
+  color: var(--app-text-muted);
   font-size: 12px;
 }
 
@@ -391,14 +469,45 @@ onMounted(async () => {
   margin: 0;
 }
 
-.page-loading {
-  padding-top: 60px;
-}
-
 .user-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.skeleton-list {
+  display: grid;
+  gap: 12px;
+}
+
+.skeleton-list :deep(.van-skeleton) {
+  padding: 18px 15px;
+  background: var(--app-surface);
+  border-radius: var(--app-card-radius);
+}
+
+.load-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px 0 4px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
+.load-error button {
+  padding: 4px 10px;
+  color: var(--app-primary);
+  background: var(--app-primary-soft);
+  border: 0;
+  border-radius: var(--app-pill-radius);
+}
+
+:deep(.van-list__finished-text),
+:deep(.van-list__loading) {
+  color: var(--app-text-muted);
+  font-size: 12px;
 }
 
 .filter-panel {
@@ -410,7 +519,7 @@ onMounted(async () => {
 .filter-heading {
   display: flex;
   justify-content: space-between;
-  padding: 20px 48px 14px 18px;
+  padding: 22px 48px 14px 20px;
 }
 
 .filter-heading h3 {
@@ -419,12 +528,12 @@ onMounted(async () => {
 
 .filter-heading p {
   margin: 5px 0 0;
-  color: #969799;
+  color: var(--app-text-muted);
   font-size: 12px;
 }
 
 .filter-heading > span {
-  color: #1989fa;
+  color: var(--app-primary);
   font-size: 13px;
   font-weight: 600;
 }
@@ -437,13 +546,13 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   margin-bottom: 10px;
-  color: #646566;
+  color: var(--app-text-secondary);
   font-size: 13px;
 }
 
 .draft-heading button {
   padding: 0;
-  color: #969799;
+  color: var(--app-text-muted);
   background: transparent;
   border: 0;
 }
@@ -452,29 +561,29 @@ onMounted(async () => {
   display: flex;
   min-height: 0;
   flex: 1;
-  border-top: 1px solid #f2f3f5;
+  border-top: 1px solid var(--app-border);
 }
 
 .category-menu {
   width: 104px;
   overflow-y: auto;
-  background: #f7f8fa;
+  background: var(--app-bg);
 }
 
 .category-item {
   position: relative;
   width: 100%;
   padding: 15px 8px;
-  color: #646566;
+  color: var(--app-text-secondary);
   font-size: 13px;
   background: transparent;
   border: 0;
 }
 
 .category-item.active {
-  color: #1989fa;
+  color: var(--app-primary);
   font-weight: 600;
-  background: #fff;
+  background: var(--app-surface);
 }
 
 .category-item.active::before {
@@ -483,7 +592,7 @@ onMounted(async () => {
   left: 0;
   width: 3px;
   height: 18px;
-  background: #1989fa;
+  background: var(--app-primary);
   content: '';
   transform: translateY(-50%);
 }
@@ -503,7 +612,8 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: 100px 1fr;
   gap: 10px;
-  padding: 12px 16px 20px;
-  box-shadow: 0 -2px 8px rgb(0 0 0 / 5%);
+  padding: 12px 16px calc(14px + var(--app-safe-bottom));
+  background: var(--app-surface);
+  box-shadow: 0 -8px 24px rgb(37 45 76 / 7%);
 }
 </style>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showConfirmDialog } from 'vant';
 import { useNotify } from '../composables/useNotify';
@@ -41,7 +41,6 @@ const { connect, disconnect, onMessage } = useCardWebSocket();
 const roomId = Number(route.params.id);
 const room = ref<CardRoomVO | null>(null);
 const currentUser = ref<User | null>(null);
-const roomPageRef = ref<HTMLElement | null>(null);
 const loading = ref(true);
 const loginRequired = ref(false);
 const POSITIVE_INTEGER_PATTERN = /^[1-9]\d{0,5}$/;
@@ -147,7 +146,7 @@ const fundSettlementTransfers = computed<SettlementTransfer[]>(() => {
       fromName: participant.username,
       toUserId: fund.creatorId,
       toName: fund.creatorName,
-      amount: baseShare + (index + 1 < remainder ? 1 : 0),
+      amount: baseShare + (index < remainder ? 1 : 0),
       unit: 'fen',
     }));
   });
@@ -190,15 +189,6 @@ const fundCreatorSummaries = computed(() =>
 const hasAnySettlement = computed(() =>
   mergedAllSettlementTransfers.value.length > 0 || fundCreatorSummaries.value.length > 0,
 );
-
-const isScrollableContent = (target: EventTarget | null) =>
-  target instanceof Element && Boolean(target.closest('.member-list, .records-list'));
-
-const preventOuterTouchMove = (event: TouchEvent) => {
-  if (!isScrollableContent(event.target)) {
-    event.preventDefault();
-  }
-};
 
 const goToLogin = () => {
   router.replace({
@@ -250,8 +240,6 @@ let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 onMounted(async () => {
   await loadRoom();
-  await nextTick();
-  roomPageRef.value?.addEventListener('touchmove', preventOuterTouchMove, { passive: false });
   if (room.value && !isEnded.value) {
     connect(roomId);
     unsubWs = onMessage((payload: CardWsPayload) => {
@@ -265,7 +253,6 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (refreshTimer) clearTimeout(refreshTimer);
-  roomPageRef.value?.removeEventListener('touchmove', preventOuterTouchMove);
   unsubWs?.();
   disconnect();
 });
@@ -479,7 +466,7 @@ const memberStatusText = (member: CardRoomMemberVO) => {
 </script>
 
 <template>
-  <div ref="roomPageRef" class="room-page">
+  <div class="room-page">
     <van-loading v-if="loading" class="page-loading" vertical>加载中...</van-loading>
 
     <van-empty v-else-if="loginRequired" description="请先登录后查看房间">
@@ -782,7 +769,7 @@ const memberStatusText = (member: CardRoomMemberVO) => {
         </div>
         <div class="amount-hint">仅支持 1 到 999999 的正整数金额</div>
         <div class="fund-members">
-          <div class="fund-members-title">谁一起平摊这笔钱（不含自己）</div>
+          <div class="fund-members-title">邀请谁一起平摊这笔钱</div>
           <div class="fund-member-list">
             <button
               v-for="member in fundCandidates"
@@ -927,13 +914,12 @@ const memberStatusText = (member: CardRoomMemberVO) => {
 .room-page {
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - var(--van-nav-bar-height, 46px));
+  height: calc(100dvh - var(--app-nav-height));
   min-height: 0;
-  padding: 12px 12px 76px;
+  padding: 14px var(--app-page-padding) calc(78px + var(--app-safe-bottom));
   overflow: hidden;
   overscroll-behavior-x: none;
-  touch-action: pan-y;
-  background: #f7f8fa;
+  background: var(--app-bg);
   box-sizing: border-box;
 }
 
@@ -946,15 +932,18 @@ const memberStatusText = (member: CardRoomMemberVO) => {
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
-  padding: 16px;
-  margin-bottom: 10px;
+  padding: 18px;
+  margin-bottom: 12px;
   color: #fff;
-  background: linear-gradient(135deg, #1989fa, #07c160);
-  border-radius: 8px;
+  background:
+    radial-gradient(circle at 88% 12%, rgb(255 255 255 / 18%) 0 40px, transparent 41px),
+    linear-gradient(135deg, #5968e9 0%, #6d64df 60%, #28aa9b 125%);
+  border-radius: 22px;
+  box-shadow: 0 14px 30px rgb(89 104 233 / 18%);
 }
 
 .room-header.ended {
-  background: #969799;
+  background: linear-gradient(135deg, #858b9d, #676d7d);
 }
 
 .room-code-row {
@@ -984,11 +973,13 @@ const memberStatusText = (member: CardRoomMemberVO) => {
 .room-panel {
   display: flex;
   flex-direction: column;
-  padding: 12px;
-  margin-bottom: 10px;
+  padding: 14px;
+  margin-bottom: 12px;
   overflow-x: hidden;
-  background: #fff;
-  border-radius: 8px;
+  background: var(--app-surface);
+  border: 1px solid rgb(255 255 255 / 76%);
+  border-radius: 18px;
+  box-shadow: var(--app-shadow-sm);
 }
 
 .panel-head {
@@ -1001,16 +992,16 @@ const memberStatusText = (member: CardRoomMemberVO) => {
 }
 
 .section-title {
-  color: #323233;
-  font-weight: 600;
-  font-size: 15px;
+  color: var(--app-text);
+  font-weight: 700;
+  font-size: 16px;
   line-height: 1.3;
 }
 
 .section-desc,
 .panel-count {
   margin-top: 2px;
-  color: #969799;
+  color: var(--app-text-muted);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -1052,8 +1043,8 @@ const memberStatusText = (member: CardRoomMemberVO) => {
   padding: 10px 12px;
   max-width: 100%;
   min-width: 0;
-  background: #f7f8fa;
-  border-radius: 8px;
+  background: var(--app-surface-muted);
+  border-radius: 13px;
 }
 
 .member-item.left {
@@ -1085,14 +1076,14 @@ const memberStatusText = (member: CardRoomMemberVO) => {
 .member-name-row small {
   flex: 0 0 auto;
   margin-left: 6px;
-  color: #969799;
+  color: var(--app-text-muted);
   font-size: 11px;
 }
 
 .owner-tag {
   flex: 0 0 auto;
   margin-left: 4px;
-  color: #1989fa;
+  color: var(--app-primary);
   font-weight: 400;
   font-size: 10px;
 }
@@ -1105,11 +1096,11 @@ const memberStatusText = (member: CardRoomMemberVO) => {
 }
 
 .positive {
-  color: #07c160;
+  color: var(--app-success);
 }
 
 .negative {
-  color: #ee0a24;
+  color: var(--app-danger);
 }
 
 .fund-balance-bar {
@@ -1167,8 +1158,8 @@ const memberStatusText = (member: CardRoomMemberVO) => {
   max-width: 100%;
   min-width: 0;
   overflow-x: hidden;
-  background: #f7f8fa;
-  border-radius: 8px;
+  background: var(--app-surface-muted);
+  border-radius: 14px;
 }
 
 .record-head {
@@ -1181,7 +1172,7 @@ const memberStatusText = (member: CardRoomMemberVO) => {
 
 .record-head time {
   margin-left: auto;
-  color: #969799;
+  color: var(--app-text-muted);
   font-size: 11px;
 }
 
@@ -1209,27 +1200,31 @@ const memberStatusText = (member: CardRoomMemberVO) => {
 }
 
 .record-meta {
-  color: #969799;
+  color: var(--app-text-muted);
   font-size: 12px;
   line-height: 1.5;
 }
 
 .fund-share-line {
   margin-bottom: 4px;
-  color: #323233;
+  color: var(--app-text);
   font-size: 13px;
   font-weight: 600;
 }
 
 .bottom-bar {
   position: fixed;
-  right: 0;
   bottom: 0;
-  left: 0;
+  left: 50%;
   z-index: 99;
-  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
-  background: #fff;
-  border-top: 1px solid #eee;
+  width: min(100%, 480px);
+  padding: 10px var(--app-page-padding) calc(10px + var(--app-safe-bottom));
+  background: rgb(255 255 255 / 94%);
+  border-top: 1px solid var(--app-border);
+  box-shadow: 0 -8px 26px rgb(37 45 76 / 7%);
+  transform: translateX(-50%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 .transfer-inputs {
@@ -1266,25 +1261,25 @@ const memberStatusText = (member: CardRoomMemberVO) => {
   padding: 6px 8px;
   font-size: 16px;
   text-align: center;
-  border: 1px solid #ebedf0;
-  border-radius: 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
   outline: none;
 }
 
 .transfer-input:focus,
 .fund-amount-input:focus {
-  border-color: #1989fa;
+  border-color: var(--app-primary);
 }
 
 .transfer-unit,
 .fund-unit {
-  color: #969799;
+  color: var(--app-text-muted);
   font-size: 13px;
 }
 
 .transfer-sum {
   padding: 12px 0 4px;
-  color: #ee0a24;
+  color: var(--app-danger);
   font-size: 15px;
   text-align: center;
 }
@@ -1295,7 +1290,7 @@ const memberStatusText = (member: CardRoomMemberVO) => {
 
 .amount-hint {
   margin: 6px 0 10px;
-  color: #969799;
+  color: var(--app-text-muted);
   font-size: 12px;
   text-align: center;
 }
@@ -1317,14 +1312,14 @@ const memberStatusText = (member: CardRoomMemberVO) => {
   padding: 10px 12px;
   font-size: 22px;
   text-align: center;
-  border: 1px solid #ebedf0;
-  border-radius: 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
   outline: none;
 }
 
 .fund-members-title {
   margin-bottom: 10px;
-  color: #969799;
+  color: var(--app-text-muted);
   font-size: 13px;
 }
 
@@ -1336,37 +1331,37 @@ const memberStatusText = (member: CardRoomMemberVO) => {
 
 .fund-member-chip {
   padding: 6px 14px;
-  color: #646566;
+  color: var(--app-text-secondary);
   font-size: 13px;
-  background: #f7f8fa;
+  background: var(--app-surface-muted);
   border: 0;
   border-radius: 16px;
 }
 
 .fund-member-chip.selected {
   color: #fff;
-  background: #1989fa;
+  background: var(--app-primary);
 }
 
 .fund-preview {
   padding: 10px 12px;
   margin-top: 12px;
-  color: #646566;
+  color: var(--app-text-secondary);
   font-size: 13px;
   text-align: center;
-  background: #f7f8fa;
-  border-radius: 8px;
+  background: var(--app-surface-muted);
+  border-radius: 12px;
 }
 
 .fund-preview b {
-  color: #1989fa;
+  color: var(--app-primary);
 }
 
 .settlement-panel {
   max-height: 68vh;
   padding: 4px 16px 18px;
   overflow-y: auto;
-  background: #f7f8fa;
+  background: var(--app-bg);
 }
 
 .settlement-hero {

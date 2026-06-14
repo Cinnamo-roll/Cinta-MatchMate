@@ -304,9 +304,23 @@ public class ChatServiceImpl implements ChatService {
 
     private void refreshDynamicConversationState(ConversationVO conversation, Long currentUserId) {
         Long targetId = conversation.getTargetUserId();
+        refreshLatestMessageState(conversation);
         conversation.setUnreadCount(resolveUnreadCount(currentUserId, conversation.getId()));
         conversation.setIsOnline(onlineUserService.isOnline(targetId));
         conversation.setLastOnlineTime(chatRedisService.getLastOnline(targetId));
+    }
+
+    private void refreshLatestMessageState(ConversationVO conversation) {
+        Message latestMessage = messageMapper.selectLatestByConversationId(conversation.getId());
+        if (latestMessage == null) {
+            conversation.setLastMessageSenderId(null);
+            conversation.setLastMessageReceiverId(null);
+            conversation.setLastMessageStatus(null);
+            return;
+        }
+        conversation.setLastMessageSenderId(latestMessage.getSenderId());
+        conversation.setLastMessageReceiverId(latestMessage.getReceiverId());
+        conversation.setLastMessageStatus(latestMessage.getStatus());
     }
 
     private Long targetUserId(Conversation conversation, Long currentUserId) {

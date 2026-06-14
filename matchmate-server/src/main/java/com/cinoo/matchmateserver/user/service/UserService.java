@@ -3,6 +3,7 @@ package com.cinoo.matchmateserver.user.service;
 import com.cinoo.matchmateserver.common.PageResponse;
 import com.cinoo.matchmateserver.user.model.entity.User;
 import com.cinoo.matchmateserver.user.model.request.UpdateUserProfileRequest;
+import com.cinoo.matchmateserver.user.model.vo.UserRecommendationVO;
 import com.cinoo.matchmateserver.user.model.vo.UserVO;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.multipart.MultipartFile;
@@ -97,7 +98,13 @@ public interface UserService {
      * @param tagList 必须全部匹配的标签
      * @return 匹配的用户列表
      */
-    List<UserVO> searchUserByTags(String keyword, List<String> tagList);
+    PageResponse<UserVO> searchUserByTags(
+            String keyword,
+            List<String> tagList,
+            long pageNum,
+            long pageSize,
+            HttpServletRequest request
+    );
 
     /**
      * 更新当期用户标签。
@@ -141,7 +148,11 @@ public interface UserService {
      * @param limit 最大推荐数量
      * @return 推荐用户列表
      */
-    List<UserVO> recommendUsers(int limit);
+    PageResponse<UserRecommendationVO> recommendUsers(
+            long pageNum,
+            long pageSize,
+            HttpServletRequest request
+    );
 
     /**
      * 注销当前登录用户账户（需验证密码）。

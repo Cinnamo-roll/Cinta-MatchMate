@@ -46,7 +46,7 @@ const submitRegister = async () => {
 
 <template>
   <div class="auth-page">
-    <van-icon name="contact-o" size="56" color="#1989fa" />
+    <van-icon name="contact-o" size="56" color="var(--app-primary)" />
     <h2>注册 MatchMate</h2>
     <p>创建账号，找到志同道合的伙伴</p>
 
@@ -54,6 +54,7 @@ const submitRegister = async () => {
       v-model="registerForm.userAccount"
       label="账号"
       placeholder="4-16位字母或数字"
+      autocomplete="username"
       clearable
     />
     <van-field
@@ -61,6 +62,7 @@ const submitRegister = async () => {
       type="password"
       label="密码"
       placeholder="至少8位"
+      autocomplete="new-password"
       clearable
     />
     <van-field
@@ -68,6 +70,7 @@ const submitRegister = async () => {
       type="password"
       label="确认密码"
       placeholder="再次输入密码"
+      autocomplete="new-password"
       clearable
       @keyup.enter="submitRegister"
     />

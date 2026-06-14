@@ -1,0 +1,80 @@
+:root {
+  color-scheme: light;
+
+  --app-primary: #5968e9;
+  --app-primary-strong: #4656d9;
+  --app-primary-soft: #eef0ff;
+  --app-accent: #23b89a;
+  --app-accent-soft: #eaf9f5;
+  --app-warning: #f59d48;
+  --app-danger: #ef5d72;
+  --app-success: #23b26d;
+
+  --app-bg: #f4f6fb;
+  --app-surface: #fff;
+  --app-surface-muted: #f7f8fc;
+  --app-text: #202333;
+  --app-text-secondary: #666b7d;
+  --app-text-muted: #969bad;
+  --app-border: #e9ebf2;
+
+  --app-page-padding: 16px;
+  --app-card-radius: 20px;
+  --app-control-radius: 14px;
+  --app-pill-radius: 999px;
+  --app-shadow-sm: 0 4px 14px rgb(37 45 76 / 5%);
+  --app-shadow-md: 0 12px 34px rgb(37 45 76 / 10%);
+  --app-duration-fast: 160ms;
+  --app-duration: 220ms;
+  --app-ease: cubic-bezier(.22, 1, .36, 1);
+  --app-nav-height: 52px;
+  --app-tabbar-height: 58px;
+  --app-safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  --van-primary-color: var(--app-primary);
+  --van-success-color: var(--app-success);
+  --van-danger-color: var(--app-danger);
+  --van-warning-color: var(--app-warning);
+  --van-text-color: var(--app-text);
+  --van-text-color-2: var(--app-text-secondary);
+  --van-text-color-3: var(--app-text-muted);
+  --van-border-color: var(--app-border);
+  --van-background: var(--app-bg);
+  --van-background-2: var(--app-surface);
+  --van-padding-md: 16px;
+  --van-radius-lg: var(--app-control-radius);
+  --van-button-default-height: 46px;
+  --van-button-round-radius: var(--app-pill-radius);
+  --van-field-input-text-color: var(--app-text);
+  --van-field-placeholder-text-color: #b0b4c2;
+  --van-cell-vertical-padding: 15px;
+  --van-cell-horizontal-padding: 16px;
+  --van-nav-bar-height: var(--app-nav-height);
+  --van-nav-bar-background: rgb(255 255 255 / 92%);
+  --van-nav-bar-title-text-color: var(--app-text);
+  --van-nav-bar-icon-color: var(--app-text);
+  --van-nav-bar-text-color: var(--app-text);
+  --van-tabbar-height: var(--app-tabbar-height);
+  --van-tabbar-background: rgb(255 255 255 / 94%);
+  --van-tabbar-item-active-color: var(--app-primary);
+  --van-tabbar-item-text-color: #8b90a2;
+  --van-popup-round-radius: 24px;
+  --van-dialog-border-radius: 22px;
+  --van-search-background: transparent;
+  --van-search-content-background: var(--app-surface-muted);
+  --van-tag-primary-color: var(--app-primary);
+}
+
+@media (max-width: 360px) {
+  :root {
+    --app-page-padding: 12px;
+    --app-card-radius: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --app-duration-fast: 0ms;
+    --app-duration: 0ms;
+  }
+}

@@ -5,6 +5,9 @@ export type ConversationVO = {
   targetAvatarUrl: string | null;
   lastMessage: string | null;
   lastMessageTime: string | null;
+  lastMessageSenderId: number | null;
+  lastMessageReceiverId: number | null;
+  lastMessageStatus: number | null;
   unreadCount: number;
   isOnline: boolean | null;
   lastOnlineTime: string | null;

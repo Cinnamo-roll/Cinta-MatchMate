@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, ref, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useNotify } from '../composables/useNotify';
 import { getConversations, openConversation } from '../api/chat';
+import { getCurrentUser } from '../api/matchmate';
 import { useWebSocket } from '../composables/useWebSocket';
 import type { ConversationVO, WsPushPayload } from '../models/chat';
 import { getRequestErrorMessage, isUnauthorizedError } from '../utils/http';
@@ -17,6 +18,7 @@ const loading = ref(false);
 const loadFailed = ref(false);
 const loginRequired = ref(false);
 const searchText = ref('');
+const currentUserId = ref<number | null>(null);
 
 const filteredConversations = computed(() => {
   if (!searchText.value.trim()) return conversations.value;
@@ -32,6 +34,8 @@ const loadConversations = async () => {
     loading.value = true;
     loadFailed.value = false;
     loginRequired.value = false;
+    const currentUser = await getCurrentUser();
+    currentUserId.value = currentUser.id;
     conversations.value = await getConversations();
   } catch (error) {
     conversations.value = [];
@@ -46,6 +50,12 @@ const loadConversations = async () => {
     loading.value = false;
   }
 };
+
+const isLastMessageMine = (conv: ConversationVO) =>
+  currentUserId.value !== null && conv.lastMessageSenderId === currentUserId.value;
+
+const lastMessageReadText = (conv: ConversationVO) =>
+  conv.lastMessageStatus === 1 ? '已读' : '未读';
 
 const goToLogin = () => {
   router.push({
@@ -63,6 +73,9 @@ const handleNewMessage = (payload: WsPushPayload) => {
     const conv = conversations.value[idx];
     conv.lastMessage = msg.content;
     conv.lastMessageTime = msg.createTime;
+    conv.lastMessageSenderId = msg.senderId;
+    conv.lastMessageReceiverId = msg.receiverId;
+    conv.lastMessageStatus = msg.status;
     conv.unreadCount += 1;
     // 移到列表顶部
     conversations.value.splice(idx, 1);
@@ -71,6 +84,23 @@ const handleNewMessage = (payload: WsPushPayload) => {
     // 新会话，重新加载列表
     loadConversations();
   }
+};
+
+const handleMessagesRead = (payload: WsPushPayload) => {
+  if (payload.type !== 'messages_read') return;
+  const idx = conversations.value.findIndex(
+    (conv) => conv.id === payload.data.conversationId,
+  );
+  if (idx === -1) return;
+  const conv = conversations.value[idx];
+  if (conv.lastMessageSenderId === currentUserId.value) {
+    conv.lastMessageStatus = 1;
+  }
+};
+
+const handleWsMessage = (payload: WsPushPayload) => {
+  handleNewMessage(payload);
+  handleMessagesRead(payload);
 };
 
 const enterConversation = async (conv: ConversationVO) => {
@@ -96,18 +126,14 @@ const formatTime = (timeStr: string | null) => {
   if (!timeStr) return '';
   const date = new Date(timeStr);
   const now = new Date();
-  const diff = now.getTime() - date.getTime();
-  // 今天内显示时间
-  if (diff < 86400000 && date.getDate() === now.getDate()) {
+  if (date.toDateString() === now.toDateString()) {
     return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
   }
-  // 昨天
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
-  if (date.getDate() === yesterday.getDate()) {
+  if (date.toDateString() === yesterday.toDateString()) {
     return '昨天';
   }
-  // 今年内显示月日
   if (date.getFullYear() === now.getFullYear()) {
     return `${date.getMonth() + 1}/${date.getDate()}`;
   }
@@ -119,7 +145,7 @@ let unsubMessage: (() => void) | null = null;
 onMounted(() => {
   loadConversations();
   connect();
-  unsubMessage = onMessage(handleNewMessage);
+  unsubMessage = onMessage(handleWsMessage);
 });
 
 onUnmounted(() => {
@@ -130,83 +156,95 @@ onUnmounted(() => {
 
 <template>
   <div class="conversation-page">
-    <div class="retention-notice">
-      <van-icon name="info-o" />
-      <span>聊天记录仅保留 24 小时，请及时查看重要信息</span>
-    </div>
-    <!-- 搜索框 -->
-    <div class="search-bar">
-      <van-icon name="search" size="16" color="#999" />
-      <input
-        v-model="searchText"
-        class="search-input"
-        type="text"
-        placeholder="搜索会话..."
-      />
-      <van-icon
-        v-if="searchText"
-        name="clear"
-        size="16"
-        color="#999"
-        @click="searchText = ''"
-      />
-    </div>
-
-    <van-loading v-if="loading" class="page-loading" vertical>
-      加载中...
-    </van-loading>
-
-    <div v-else-if="loginRequired" class="login-hint">
-      <van-icon name="chat-o" size="28" color="#1989fa" />
-      <strong>请先登录后查看消息</strong>
-      <p>登录后可以查看会话、未读消息和聊天记录。</p>
-      <van-button round size="small" type="primary" @click="goToLogin">
-        去登录
-      </van-button>
-    </div>
-
-    <div v-else-if="loadFailed" class="login-hint">
-      <van-icon name="warning-o" size="28" color="#ee0a24" />
-      <strong>消息暂时加载失败</strong>
-      <p>网络可能开小差了，请稍后重试。</p>
-      <van-button round size="small" type="primary" @click="loadConversations">
-        重试
-      </van-button>
-    </div>
-
-    <template v-else-if="filteredConversations.length > 0">
-      <div
-        v-for="conv in filteredConversations"
-        :key="conv.id"
-        class="conv-item"
-        @click="enterConversation(conv)"
-      >
-        <div class="conv-avatar">
-          <van-image
-            v-if="conv.targetAvatarUrl"
-            :src="conv.targetAvatarUrl"
-            round
-            width="48"
-            height="48"
-            fit="cover"
-          />
-          <van-icon v-else name="contact" size="32" color="#c8c9cc" />
-          <span v-if="conv.isOnline" class="online-dot" />
-        </div>
-        <div class="conv-info">
-          <div class="conv-top">
-            <span class="conv-name">{{ conv.targetUsername ?? '未知用户' }}</span>
-            <span class="conv-time">{{ formatTime(conv.lastMessageTime) }}</span>
-          </div>
-          <div class="conv-bottom">
-            <span class="conv-last-msg">{{ conv.lastMessage ?? '' }}</span>
-            <van-badge v-if="conv.unreadCount > 0" :content="conv.unreadCount" max="99" />
-          </div>
-        </div>
+    <div class="conversation-fixed">
+      <div class="retention-notice">
+        <van-icon name="info-o" />
+        <span>聊天记录仅保留 24 小时，请及时查看重要信息</span>
       </div>
-    </template>
+      <!-- 搜索框 -->
+      <div class="search-bar">
+        <van-icon name="search" size="16" color="#999" />
+        <input
+          v-model="searchText"
+          class="search-input"
+          type="text"
+          placeholder="搜索会话..."
+        />
+        <van-icon
+          v-if="searchText"
+          name="clear"
+          size="16"
+          color="#999"
+          @click="searchText = ''"
+        />
+      </div>
+    </div>
 
-    <van-empty v-else description="暂无会话" />
+    <main class="conversation-scroll">
+      <van-loading v-if="loading" class="page-loading" vertical>
+        加载中...
+      </van-loading>
+
+      <div v-else-if="loginRequired" class="login-hint">
+        <van-icon name="chat-o" size="28" color="#1989fa" />
+        <strong>请先登录后查看消息</strong>
+        <p>登录后可以查看会话、未读消息和聊天记录。</p>
+        <van-button round size="small" type="primary" @click="goToLogin">
+          去登录
+        </van-button>
+      </div>
+
+      <div v-else-if="loadFailed" class="login-hint">
+        <van-icon name="warning-o" size="28" color="#ee0a24" />
+        <strong>消息暂时加载失败</strong>
+        <p>网络可能开小差了，请稍后重试。</p>
+        <van-button round size="small" type="primary" @click="loadConversations">
+          重试
+        </van-button>
+      </div>
+
+      <template v-else-if="filteredConversations.length > 0">
+        <button
+          v-for="conv in filteredConversations"
+          :key="conv.id"
+          type="button"
+          class="conv-item"
+          @click="enterConversation(conv)"
+        >
+          <div class="conv-avatar">
+            <van-image
+              v-if="conv.targetAvatarUrl"
+              :src="conv.targetAvatarUrl"
+              round
+              width="48"
+              height="48"
+              fit="cover"
+            />
+            <van-icon v-else name="contact" size="32" color="#c8c9cc" />
+            <span v-if="conv.isOnline" class="online-dot" />
+          </div>
+          <div class="conv-info">
+            <div class="conv-top">
+              <span class="conv-name">{{ conv.targetUsername ?? '未知用户' }}</span>
+              <span class="conv-time">{{ formatTime(conv.lastMessageTime) }}</span>
+            </div>
+            <div class="conv-bottom">
+              <span class="conv-last-msg">{{ conv.lastMessage ?? '' }}</span>
+              <span
+                v-if="isLastMessageMine(conv)"
+                class="message-status"
+                :class="{ read: conv.lastMessageStatus === 1 }"
+              >
+                {{ lastMessageReadText(conv) }}
+              </span>
+              <van-badge v-else-if="conv.unreadCount > 0" :content="conv.unreadCount" max="99" />
+            </div>
+          </div>
+        </button>
+      </template>
+
+      <van-empty v-else description="暂无会话" />
+    </main>
   </div>
 </template>
 
@@ -214,14 +252,31 @@ onUnmounted(() => {
 .conversation-page {
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - var(--van-nav-bar-height, 46px) - var(--van-tabbar-height, 50px));
+  height: calc(100dvh - var(--app-nav-height) - var(--app-tabbar-height) - var(--app-safe-bottom));
+  min-height: 0;
   max-width: 100%;
+  overflow: hidden;
+  background: var(--app-bg);
+}
+
+.conversation-fixed {
+  flex: 0 0 auto;
+  background: var(--app-bg);
+}
+
+.conversation-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-bottom: 14px;
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior-x: none;
-  overscroll-behavior-y: none;
-  touch-action: pan-y;
-  background: #fff;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.conversation-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 .page-loading {
@@ -235,20 +290,21 @@ onUnmounted(() => {
   gap: 8px;
   margin: 48px 24px 0;
   padding: 28px 18px;
-  color: #646566;
+  color: var(--app-text-secondary);
   text-align: center;
-  background: #f7f8fa;
-  border-radius: 16px;
+  background: var(--app-surface);
+  border-radius: var(--app-card-radius);
+  box-shadow: var(--app-shadow-sm);
 }
 
 .login-hint strong {
-  color: #323233;
+  color: var(--app-text);
   font-size: 16px;
 }
 
 .login-hint p {
   margin: 0;
-  color: #969799;
+  color: var(--app-text-muted);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -257,127 +313,147 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 8px 12px 0;
-  padding: 8px 10px;
-  max-width: calc(100% - 24px);
+  max-width: calc(100% - (var(--app-page-padding) * 2));
+  padding: 9px 12px;
+  margin: 10px var(--app-page-padding) 4px;
   overflow: hidden;
-  color: #8a6d3b;
+  color: #9a692d;
   font-size: 12px;
-  background: #fff8e6;
-  border-radius: 8px;
+  background: #fff6e9;
+  border: 1px solid #f9e6c9;
+  border-radius: 12px;
 }
 
 .conv-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
-  width: 100%;
+  width: calc(100% - (var(--app-page-padding) * 2));
   max-width: 100%;
   min-width: 0;
+  padding: 14px 15px;
+  margin: 0 var(--app-page-padding) 10px;
   overflow: hidden;
-  border-bottom: 1px solid #f5f5f5;
+  color: inherit;
+  text-align: left;
+  background: var(--app-surface);
+  border: 1px solid rgb(255 255 255 / 76%);
+  border-radius: var(--app-card-radius);
+  box-shadow: var(--app-shadow-sm);
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--app-duration-fast) var(--app-ease);
 }
 
 .conv-item:active {
-  background: #f2f3f5;
+  background: var(--app-surface-muted);
+  transform: scale(.992);
 }
 
 .conv-avatar {
-  flex-shrink: 0;
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   width: 48px;
   height: 48px;
+  background: var(--app-surface-muted);
   border-radius: 50%;
-  background: #f5f5f5;
 }
 
 .online-dot {
   position: absolute;
-  bottom: 0;
   right: 0;
+  bottom: 0;
   width: 12px;
   height: 12px;
-  background: #07c160;
-  border: 2px solid #fff;
+  background: var(--app-success);
+  border: 2px solid var(--app-surface);
   border-radius: 50%;
 }
 
 .conv-info {
-  flex: 1;
-  min-width: 0;
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 
-.conv-top {
+.conv-top,
+.conv-bottom {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   min-width: 0;
 }
 
 .conv-name {
-  font-size: 16px;
-  font-weight: 500;
-  color: #333;
   overflow: hidden;
+  color: var(--app-text);
+  font-size: 16px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .conv-time {
-  font-size: 12px;
-  color: #999;
   flex-shrink: 0;
-}
-
-.conv-bottom {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  min-width: 0;
+  color: var(--app-text-muted);
+  font-size: 12px;
 }
 
 .conv-last-msg {
+  flex: 1;
   min-width: 0;
-  font-size: 13px;
-  color: #999;
+  margin-right: 8px;
   overflow: hidden;
+  color: var(--app-text-muted);
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1;
-  margin-right: 8px;
+}
+
+.message-status {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  color: var(--app-text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+  background: var(--app-surface-muted);
+  border-radius: var(--app-pill-radius);
+}
+
+.message-status.read {
+  color: var(--app-primary);
+  background: var(--app-primary-soft);
 }
 
 .search-bar {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 8px 12px;
-  padding: 8px 12px;
-  max-width: calc(100% - 24px);
+  max-width: calc(100% - (var(--app-page-padding) * 2));
+  min-height: 42px;
+  padding: 8px 13px;
+  margin: 8px var(--app-page-padding) 12px;
   overflow: hidden;
-  background: #f5f5f5;
-  border-radius: 8px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-pill-radius);
+  box-shadow: var(--app-shadow-sm);
 }
 
 .search-input {
   flex: 1;
-  border: none;
+  color: var(--app-text);
+  font-size: 16px;
   background: transparent;
+  border: 0;
   outline: none;
-  font-size: 14px;
-  color: #333;
 }
 
 .search-input::placeholder {
-  color: #999;
+  color: var(--app-text-muted);
 }
 </style>

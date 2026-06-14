@@ -2,6 +2,7 @@ package com.cinoo.matchmateserver.user.mapper;
 
 import com.cinoo.matchmateserver.user.model.entity.User;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
@@ -11,13 +12,19 @@ import java.util.List;
  */
 public interface UserMapper extends BaseMapper<User> {
 
-    List<User> searchByKeywordAndTags(
+    Page<User> searchPageByKeywordAndTags(
+            Page<User> page,
             @Param("keyword") String keyword,
             @Param("tagList") List<String> tagList,
-            @Param("tagCount") int tagCount
+            @Param("tagCount") int tagCount,
+            @Param("currentUserId") Long currentUserId,
+            @Param("adminRole") int adminRole
     );
 
-    List<User> recommendUsers(@Param("limit") int limit);
+    List<User> selectRecommendationCandidates(
+            @Param("excludedUserId") Long excludedUserId,
+            @Param("limit") int limit
+    );
 
     /**
      * 查询全体用户排名。

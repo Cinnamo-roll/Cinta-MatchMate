@@ -8,6 +8,7 @@ import { getCurrentUser } from '../api/matchmate';
 defineProps<{
   user: User;
   highlightedTags?: string[];
+  recommendationReason?: string;
 }>();
 
 const router = useRouter();
@@ -76,6 +77,11 @@ onMounted(async () => {
         </van-tag>
         <span v-if="user.userTags.length === 0" class="no-tags">暂无标签</span>
       </div>
+
+      <p v-if="recommendationReason" class="recommendation-reason">
+        <van-icon name="like-o" />
+        <span>{{ recommendationReason }}</span>
+      </p>
     </div>
 
     <button
@@ -94,15 +100,23 @@ onMounted(async () => {
 .user-card {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 13px;
   width: 100%;
   min-width: 0;
-  padding: 16px;
+  padding: 15px;
   overflow: hidden;
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 3px 12px rgb(0 0 0 / 4%);
+  background: var(--app-surface);
+  border: 1px solid rgb(255 255 255 / 76%);
+  border-radius: var(--app-card-radius);
+  box-shadow: var(--app-shadow-sm);
   box-sizing: border-box;
+  transition:
+    transform var(--app-duration-fast) var(--app-ease),
+    box-shadow var(--app-duration-fast) ease;
+}
+
+.user-card:active {
+  transform: scale(.992);
 }
 
 .avatar-wrap {
@@ -120,8 +134,8 @@ onMounted(async () => {
   right: 1px;
   width: 14px;
   height: 14px;
-  background: #07c160;
-  border: 2px solid #fff;
+  background: var(--app-success);
+  border: 2px solid var(--app-surface);
   border-radius: 50%;
 }
 
@@ -140,7 +154,7 @@ onMounted(async () => {
 .user-name {
   min-width: 0;
   overflow: hidden;
-  color: #323233;
+  color: var(--app-text);
   font-size: 17px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -149,9 +163,9 @@ onMounted(async () => {
 .gender-badge {
   flex-shrink: 0;
   padding: 2px 7px;
-  color: #1989fa;
+  color: var(--app-primary);
   font-size: 11px;
-  background: #ecf9ff;
+  background: var(--app-primary-soft);
   border-radius: 8px;
 }
 
@@ -159,7 +173,7 @@ onMounted(async () => {
   display: block;
   margin: 3px 0 9px;
   overflow: hidden;
-  color: #969799;
+  color: var(--app-text-muted);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -172,7 +186,7 @@ onMounted(async () => {
   color: #fff;
   font-size: 10px;
   font-style: normal;
-  background: #07c160;
+  background: var(--app-accent);
   border-radius: 6px;
   vertical-align: middle;
 }
@@ -192,8 +206,26 @@ onMounted(async () => {
 }
 
 .no-tags {
-  color: #969799;
+  color: var(--app-text-muted);
   font-size: 13px;
+}
+
+.recommendation-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  margin: 9px 0 0;
+  padding: 7px 9px;
+  color: #327eb5;
+  font-size: 12px;
+  line-height: 1.4;
+  background: #edf8ff;
+  border-radius: 10px;
+}
+
+.recommendation-reason .van-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 .chat-button {
@@ -201,11 +233,11 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   padding: 0;
-  color: #1989fa;
-  background: #ecf9ff;
+  color: var(--app-primary);
+  background: var(--app-primary-soft);
   border: 0;
   border-radius: 50%;
   cursor: pointer;
@@ -213,7 +245,23 @@ onMounted(async () => {
 }
 
 .chat-button:active {
-  background: #d8f3ff;
+  background: #dfe3ff;
   transform: scale(0.96);
+}
+
+@media (max-width: 360px) {
+  .user-card {
+    gap: 10px;
+    padding: 13px;
+  }
+
+  .user-avatar {
+    width: 52px !important;
+    height: 52px !important;
+  }
+
+  .user-tags {
+    gap: 6px;
+  }
 }
 </style>

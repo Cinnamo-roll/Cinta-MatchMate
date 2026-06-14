@@ -13,6 +13,7 @@ import com.cinoo.matchmateserver.exception.BusinessException;
 import com.cinoo.matchmateserver.user.mapper.UserMapper;
 import com.cinoo.matchmateserver.user.model.entity.User;
 import com.cinoo.matchmateserver.user.model.request.UpdateUserProfileRequest;
+import com.cinoo.matchmateserver.user.model.vo.UserRecommendationVO;
 import com.cinoo.matchmateserver.user.model.vo.UserVO;
 import com.cinoo.matchmateserver.user.service.PasswordService;
 import com.cinoo.matchmateserver.tag.service.TagService;
@@ -31,9 +32,11 @@ import org.springframework.web.multipart.MultipartFile;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
-import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -46,7 +49,7 @@ public class UserServiceImpl implements UserService {
     private static final int MIN_ACCOUNT_LENGTH = 4;
     private static final int MIN_PASSWORD_LENGTH = 8;
     private static final long MAX_PAGE_SIZE = 100;
-    private static final int MAX_RECOMMENDATION_LIMIT = 50;
+    private static final int MAX_RECOMMENDATION_CANDIDATES = 200;
     private static final int MAX_SEARCH_TAGS = 3;
     private static final Pattern ACCOUNT_PATTERN = Pattern.compile("^[a-zA-Z0-9]{4,16}$");
 
@@ -283,38 +286,35 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public List<UserVO> searchUserByTags(String keyword, List<String> tagList) {
+    public PageResponse<UserVO> searchUserByTags(
+            String keyword,
+            List<String> tagList,
+            long pageNum,
+            long pageSize,
+            HttpServletRequest request) {
+        validatePageParameters(pageNum, pageSize);
         List<String> normalizedTags = normalizeTags(tagList);
         String normalizedKeyword = StringUtils.trimToNull(keyword);
-        if (normalizedKeyword != null) {
-            return loadSearchResults(normalizedKeyword, normalizedTags);
-        }
-        List<UserVO> users = cacheService.get(
-                CacheNames.USER_SEARCHES,
-                CacheKeys.search(normalizedTags),
-                () -> loadSearchResults(null, normalizedTags)
+        Long currentUserId = getLoginUserId(
+                request == null ? null : request.getSession(false)
         );
-        refreshOnlineStatus(users);
-        return users;
-    }
-
-    public List<UserVO> refreshSearchCache(List<String> tagList) {
-        List<String> normalizedTags = normalizeTags(tagList);
-        return cacheService.refresh(
-                CacheNames.USER_SEARCHES,
-                CacheKeys.search(normalizedTags),
-                () -> loadSearchResults(null, normalizedTags)
+        Page<User> userPage = userMapper.searchPageByKeywordAndTags(
+                new Page<>(pageNum, pageSize),
+                normalizedKeyword,
+                normalizedTags,
+                normalizedTags.size(),
+                currentUserId,
+                UserConstant.ADMIN_ROLE
         );
-    }
-
-    private List<UserVO> loadSearchResults(String keyword, List<String> normalizedTags) {
-        return new ArrayList<>(userMapper.searchByKeywordAndTags(
-                        keyword,
-                        normalizedTags,
-                        normalizedTags.size()
-                ).stream()
+        List<UserVO> records = userPage.getRecords().stream()
                 .map(this::toUserVO)
-                .toList());
+                .toList();
+        return new PageResponse<>(
+                userPage.getTotal(),
+                userPage.getCurrent(),
+                userPage.getSize(),
+                records
+        );
     }
 
     @Override
@@ -372,32 +372,103 @@ public class UserServiceImpl implements UserService {
         }
     }
 
-    // TODO: 后期改为基于标签匹配的智能推荐算法
     @Override
-    public List<UserVO> recommendUsers(int limit) {
-        validateRecommendationLimit(limit);
-        List<UserVO> users = cacheService.get(
-                CacheNames.USER_RECOMMENDATIONS,
-                CacheKeys.recommendation(limit),
-                () -> loadRecommendations(limit)
+    public PageResponse<UserRecommendationVO> recommendUsers(
+            long pageNum,
+            long pageSize,
+            HttpServletRequest request) {
+        validatePageParameters(pageNum, pageSize);
+        Long currentUserId = getLoginUserId(
+                request == null ? null : request.getSession(false)
         );
-        refreshOnlineStatus(users);
-        return users;
-    }
+        Set<String> currentUserTags = currentUserId == null
+                ? Set.of()
+                : new HashSet<>(tagService.getUserTagNames(currentUserId));
 
-    public List<UserVO> refreshRecommendationCache(int limit) {
-        validateRecommendationLimit(limit);
-        return cacheService.refresh(
-                CacheNames.USER_RECOMMENDATIONS,
-                CacheKeys.recommendation(limit),
-                () -> loadRecommendations(limit)
-        );
-    }
-
-    private List<UserVO> loadRecommendations(int limit) {
-        return new ArrayList<>(userMapper.recommendUsers(limit).stream()
+        List<RecommendationCandidate> candidates = userMapper
+                .selectRecommendationCandidates(
+                        currentUserId,
+                        MAX_RECOMMENDATION_CANDIDATES
+                )
+                .stream()
                 .map(this::toUserVO)
-                .toList());
+                .map(user -> scoreRecommendation(user, currentUserTags))
+                .sorted(
+                        Comparator.comparingInt(RecommendationCandidate::score)
+                                .reversed()
+                                .thenComparing(
+                                        candidate -> candidate.commonTags().size(),
+                                        Comparator.reverseOrder()
+                                )
+                                .thenComparing(
+                                        candidate -> Boolean.TRUE.equals(
+                                                candidate.user().getIsOnline()
+                                        ),
+                                        Comparator.reverseOrder()
+                                )
+                                .thenComparing(candidate -> candidate.user().getId())
+                )
+                .toList();
+
+        long offset = (pageNum - 1) * pageSize;
+        if (offset >= candidates.size()) {
+            return new PageResponse<>(
+                    candidates.size(),
+                    pageNum,
+                    pageSize,
+                    List.of()
+            );
+        }
+        int fromIndex = Math.toIntExact(offset);
+        int toIndex = (int) Math.min(offset + pageSize, candidates.size());
+        List<UserRecommendationVO> records = candidates
+                .subList(fromIndex, toIndex)
+                .stream()
+                .map(candidate -> new UserRecommendationVO(
+                        candidate.user(),
+                        candidate.score(),
+                        candidate.reason(),
+                        candidate.commonTags()
+                ))
+                .toList();
+        return new PageResponse<>(
+                candidates.size(),
+                pageNum,
+                pageSize,
+                records
+        );
+    }
+
+    private RecommendationCandidate scoreRecommendation(
+            UserVO user,
+            Set<String> currentUserTags) {
+        List<String> userTags = Objects.requireNonNullElse(
+                user.getUserTags(),
+                List.of()
+        );
+        List<String> commonTags = userTags.stream()
+                .filter(currentUserTags::contains)
+                .distinct()
+                .limit(3)
+                .toList();
+
+        int score = commonTags.size() * 30;
+        score += Boolean.TRUE.equals(user.getIsOnline()) ? 15 : 0;
+        score += StringUtils.isNotBlank(user.getAvatarUrl()) ? 5 : 0;
+        score += StringUtils.isNotBlank(user.getUsername()) ? 3 : 0;
+        score += Math.min(userTags.size(), 3) * 2;
+
+        String reason;
+        if (!commonTags.isEmpty()) {
+            reason = "你们都喜欢：" + String.join("、", commonTags);
+        } else if (Boolean.TRUE.equals(user.getIsOnline())) {
+            reason = "当前在线，可以马上聊聊";
+        } else if (!userTags.isEmpty()) {
+            reason = "兴趣标签丰富，值得认识";
+        } else {
+            reason = "新伙伴，来打个招呼吧";
+        }
+        return new RecommendationCandidate(user, score, reason, commonTags);
     }
 
     @Override
@@ -495,16 +566,6 @@ public class UserServiceImpl implements UserService {
         }
     }
 
-    private void validateRecommendationLimit(int limit) {
-        if (limit <= 0 || limit > MAX_RECOMMENDATION_LIMIT) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "推荐数量必须为 1 到 50");
-        }
-    }
-
-    private void refreshOnlineStatus(List<UserVO> users) {
-        users.forEach(user -> user.setIsOnline(onlineUserService.isOnline(user.getId())));
-    }
-
     private List<String> normalizeTags(List<String> tagList) {
         if (tagList == null) {
             return List.of();
@@ -526,5 +587,12 @@ public class UserServiceImpl implements UserService {
                 && updateRequest.getGender() != 2) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "性别只能为男或女");
         }
+    }
+
+    private record RecommendationCandidate(
+            UserVO user,
+            int score,
+            String reason,
+            List<String> commonTags) {
     }
 }

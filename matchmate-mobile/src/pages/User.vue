@@ -635,10 +635,10 @@ const onAvatarFileSelected = async (event: Event) => {
 <style scoped>
 .user-page {
   position: relative;
-  height: calc(100dvh - var(--van-nav-bar-height, 46px));
-  padding-bottom: 62px;
+  height: calc(100dvh - var(--app-nav-height) - var(--app-tabbar-height) - var(--app-safe-bottom));
+  padding: 14px var(--app-page-padding) 28px;
   overflow-y: auto;
-  overscroll-behavior-y: none;
+  overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
   background: #f7f8fa;
   box-sizing: border-box;
@@ -661,8 +661,14 @@ const onAvatarFileSelected = async (event: Event) => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 24px 0;
-  background: #fff;
+  padding: 26px 0 24px;
+  margin-bottom: 12px;
+  background:
+    radial-gradient(circle at 82% 12%, rgb(89 104 233 / 12%) 0 54px, transparent 55px),
+    var(--app-surface);
+  border: 1px solid rgb(255 255 255 / 76%);
+  border-radius: 24px;
+  box-shadow: var(--app-shadow-sm);
 }
 
 .avatar-clickable {
@@ -690,8 +696,8 @@ const onAvatarFileSelected = async (event: Event) => {
   width: 30px;
   height: 30px;
   color: #fff;
-  background: rgb(25 137 250 / 90%);
-  border: 2px solid #fff;
+  background: rgb(89 104 233 / 94%);
+  border: 2px solid var(--app-surface);
   border-radius: 50%;
   box-sizing: border-box;
 }
@@ -715,8 +721,10 @@ const onAvatarFileSelected = async (event: Event) => {
 
 .user-tags-section {
   margin-top: 12px;
-  padding: 16px;
-  background: #fff;
+  padding: 18px 16px;
+  background: var(--app-surface);
+  border-radius: var(--app-card-radius);
+  box-shadow: var(--app-shadow-sm);
 }
 
 .admin-entry {
@@ -734,7 +742,7 @@ const onAvatarFileSelected = async (event: Event) => {
 .tags-heading p,
 .tag-editor-heading p {
   margin: 5px 0 0;
-  color: #969799;
+  color: var(--app-text-muted);
   font-size: 12px;
 }
 
@@ -744,15 +752,15 @@ const onAvatarFileSelected = async (event: Event) => {
 
 .top-menu {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: 25px;
+  right: calc(var(--app-page-padding) + 10px);
   z-index: 2002;
 }
 
 .top-menu .van-icon {
   display: block;
   padding: 4px;
-  color: #646566;
+  color: var(--app-text-secondary);
   cursor: pointer;
 }
 
@@ -761,26 +769,28 @@ const onAvatarFileSelected = async (event: Event) => {
   top: 100%;
   right: 0;
   margin-top: 6px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  box-shadow: var(--app-shadow-md);
   overflow: hidden;
 }
 
 .dropdown-item {
-  padding: 10px 20px;
-  color: #323233;
+  min-height: 42px;
+  padding: 10px 18px;
+  color: var(--app-text);
   font-size: 14px;
   white-space: nowrap;
   cursor: pointer;
 }
 
 .dropdown-item:active {
-  background: #f2f3f5;
+  background: var(--app-surface-muted);
 }
 
 .dropdown-item--danger {
-  color: #ee0a24;
+  color: var(--app-danger);
 }
 
 .dropdown-item--danger:active {
@@ -788,7 +798,7 @@ const onAvatarFileSelected = async (event: Event) => {
 }
 
 .editor {
-  padding: 20px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  padding: 22px 16px calc(24px + var(--app-safe-bottom));
 }
 
 .editor h3 {
@@ -820,7 +830,7 @@ const onAvatarFileSelected = async (event: Event) => {
 }
 
 .tag-editor-heading span {
-  color: #1989fa;
+  color: var(--app-primary);
   font-weight: 600;
 }
 
@@ -830,7 +840,7 @@ const onAvatarFileSelected = async (event: Event) => {
 
 .tag-category-list {
   flex: 1;
-  padding: 0 16px calc(90px + env(safe-area-inset-bottom, 0px));
+  padding: 0 16px calc(90px + var(--app-safe-bottom));
   overflow-y: auto;
 }
 
@@ -847,14 +857,14 @@ const onAvatarFileSelected = async (event: Event) => {
   right: 0;
   bottom: 0;
   left: 0;
-  padding: 12px 16px calc(20px + env(safe-area-inset-bottom, 0px));
-  background: #fff;
-  box-shadow: 0 -2px 8px rgb(0 0 0 / 5%);
+  padding: 12px 16px calc(16px + var(--app-safe-bottom));
+  background: var(--app-surface);
+  box-shadow: 0 -8px 24px rgb(37 45 76 / 7%);
 }
 
 .password-popup,
 .delete-popup {
-  padding: 20px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  padding: 22px 16px calc(24px + var(--app-safe-bottom));
 }
 
 .password-popup h3,
@@ -866,7 +876,7 @@ const onAvatarFileSelected = async (event: Event) => {
 .password-desc,
 .delete-desc {
   margin: 0 0 16px;
-  color: #969799;
+  color: var(--app-text-muted);
   font-size: 13px;
   text-align: center;
 }

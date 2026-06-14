@@ -30,7 +30,7 @@
         isDelete,userRole,totalScore,wins,losses,winRate
     </sql>
 
-    <select id="searchByKeywordAndTags" resultMap="BaseResultMap">
+    <select id="searchPageByKeywordAndTags" resultMap="BaseResultMap">
         SELECT u.*
         FROM user u
         WHERE u.isDelete = 0
@@ -62,15 +62,26 @@
               </foreach>
           ) = #{tagCount}
         </if>
-        ORDER BY u.createTime DESC, u.id DESC
+        ORDER BY
+          CASE
+            WHEN #{currentUserId} IS NOT NULL AND u.id = #{currentUserId} THEN 0
+            WHEN u.userRole = #{adminRole} THEN 1
+            ELSE 2
+          END,
+          u.createTime DESC,
+          u.id DESC
     </select>
 
-    <select id="recommendUsers" resultMap="BaseResultMap">
+    <select id="selectRecommendationCandidates" resultMap="BaseResultMap">
         SELECT u.*
         FROM user u
         WHERE u.isDelete = 0
           AND u.userStatus = 0
-        ORDER BY RAND()
+          AND u.userRole = 0
+        <if test="excludedUserId != null">
+          AND u.id != #{excludedUserId}
+        </if>
+        ORDER BY u.createTime DESC, u.id DESC
         LIMIT #{limit}
     </select>
 

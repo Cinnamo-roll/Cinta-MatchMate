@@ -9,6 +9,7 @@ export const useTagSelection = (maxTags: number) => {
   const draftTags = ref<string[]>([]);
 
   const loadCategories = async () => {
+    if (categories.value.length > 0) return;
     try {
       categories.value = await getTagCategories();
     } catch {

@@ -80,6 +80,8 @@ class ChatServiceTest {
         when(userMapper.selectBatchIds(any())).thenReturn(List.of(user(2L, "alice"), user(3L, "bob")));
         when(chatRedisService.getUnreadCount(1L, 10L)).thenReturn(2L);
         when(onlineUserService.isOnline(2L)).thenReturn(true);
+        when(messageMapper.selectLatestByConversationId(10L))
+                .thenReturn(message(100L, 10L, 1L, 2L, 1));
         when(objectMapper.writeValueAsString(any())).thenReturn("[]");
 
         List<ConversationVO> result = chatService.getConversations(new MockHttpServletRequest());
@@ -88,6 +90,8 @@ class ChatServiceTest {
         assertEquals("alice", result.get(0).getTargetUsername());
         assertEquals(2L, result.get(0).getUnreadCount());
         assertEquals(true, result.get(0).getIsOnline());
+        assertEquals(1L, result.get(0).getLastMessageSenderId());
+        assertEquals(1, result.get(0).getLastMessageStatus());
         verify(chatRedisService).clearCurrentConversation(1L);
         verify(userMapper).selectBatchIds(any());
         verify(userMapper, never()).selectById(anyLong());
@@ -197,5 +201,15 @@ class ChatServiceTest {
         conversation.setUserId2(userId2);
         conversation.setIsDelete(0);
         return conversation;
+    }
+
+    private Message message(Long id, Long conversationId, Long senderId, Long receiverId, Integer status) {
+        Message message = new Message();
+        message.setId(id);
+        message.setConversationId(conversationId);
+        message.setSenderId(senderId);
+        message.setReceiverId(receiverId);
+        message.setStatus(status);
+        return message;
     }
 }

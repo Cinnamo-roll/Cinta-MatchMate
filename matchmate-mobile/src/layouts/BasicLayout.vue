@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useNotify } from '../composables/useNotify';
 import { useWebSocket } from '../composables/useWebSocket';
-import { logout } from '../api/matchmate';
+import { getCurrentUser, logout } from '../api/matchmate';
 import type { WsPushPayload } from '../models/chat';
 
 type TabName = 'index' | 'discover' | 'message' | 'user';
@@ -26,9 +26,11 @@ const showSearch = computed(() => Boolean(route.meta.showSearch));
 const showNavbar = computed(() => !route.meta.hideNavbar);
 const showTabbar = computed(() => !route.meta.hideTabbar);
 const lockScroll = computed(() => Boolean(route.meta.lockScroll));
+const isAuthPage = computed(() => route.path === '/login' || route.path === '/register');
 const activeTab = computed<TabName>({
   get: () => {
     if (route.meta.tabbar === 'user') return 'user';
+    if (route.path === '/login' || route.path === '/register') return 'user';
     if (route.path === '/discover') return 'discover';
     if (route.path === '/team') return 'message';
     if (route.path === '/user') return 'user';
@@ -60,6 +62,28 @@ const setDocumentScrollLock = (locked: boolean) => {
 
 watch(lockScroll, setDocumentScrollLock, { immediate: true });
 let unsubscribeWs: (() => void) | null = null;
+let websocketSubscribed = false;
+
+const syncWebSocket = async () => {
+  if (isAuthPage.value) {
+    if (websocketSubscribed) {
+      websocketSubscribed = false;
+      disconnect();
+    }
+    return;
+  }
+
+  if (websocketSubscribed) return;
+
+  try {
+    await getCurrentUser();
+    if (isAuthPage.value || websocketSubscribed) return;
+    connect();
+    websocketSubscribed = true;
+  } catch {
+    // Public pages remain available without a chat WebSocket.
+  }
+};
 
 const handleWsMessage = (payload: WsPushPayload) => {
   if (payload.type !== 'account_banned') return;
@@ -69,14 +93,17 @@ const handleWsMessage = (payload: WsPushPayload) => {
   router.replace('/login');
 };
 
+watch(() => route.path, () => {
+  void syncWebSocket();
+}, { immediate: true });
+
 onMounted(() => {
-  connect();
   unsubscribeWs = onMessage(handleWsMessage);
 });
 onBeforeUnmount(() => {
   unsubscribeWs?.();
   setDocumentScrollLock(false);
-  disconnect();
+  if (websocketSubscribed) disconnect();
 });
 </script>
 
@@ -110,9 +137,14 @@ onBeforeUnmount(() => {
       :class="{
         'layout-content--locked': lockScroll,
         'layout-content--full': !showNavbar,
+        'layout-content--with-tabbar': showTabbar,
       }"
     >
-      <router-view />
+      <router-view v-slot="{ Component, route: currentRoute }">
+        <Transition name="page" mode="out-in">
+          <component :is="Component" :key="currentRoute.path" />
+        </Transition>
+      </router-view>
     </main>
 
     <van-tabbar
@@ -147,10 +179,10 @@ onBeforeUnmount(() => {
   width: 100%;
   max-width: 100vw;
   min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
   overscroll-behavior-x: none;
-  touch-action: pan-y;
-  background: #f7f8fa;
+  background: var(--app-bg);
 }
 
 .layout-content {
@@ -158,7 +190,7 @@ onBeforeUnmount(() => {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  min-height: calc(100dvh - 46px);
+  min-height: calc(100dvh - var(--app-nav-height));
   overflow-x: hidden;
 }
 
@@ -170,36 +202,52 @@ onBeforeUnmount(() => {
 }
 
 .layout-content--locked {
-  height: calc(100dvh - 46px);
+  height: calc(100dvh - var(--app-nav-height));
   min-height: 0;
   overflow: hidden;
   overscroll-behavior: none;
-  touch-action: none;
 }
 
 .layout-content--locked.layout-content--full {
   height: 100dvh;
 }
 
+.layout-content--locked.layout-content--with-tabbar {
+  height: calc(100dvh - var(--app-nav-height) - var(--app-tabbar-height) - var(--app-safe-bottom));
+}
+
+.layout-content--locked.layout-content--full.layout-content--with-tabbar {
+  height: calc(100dvh - var(--app-tabbar-height) - var(--app-safe-bottom));
+}
+
 .bottom-notify {
   position: fixed;
-  bottom: 70px;
+  right: 16px;
+  bottom: calc(var(--app-tabbar-height) + var(--app-safe-bottom) + 14px);
   left: 50%;
+  width: max-content;
+  max-width: min(calc(100vw - 32px), 420px);
   transform: translateX(-50%);
-  padding: 10px 24px;
+  padding: 11px 18px;
   color: #fff;
   font-size: 14px;
-  white-space: nowrap;
-  border-radius: 20px;
+  line-height: 1.45;
+  text-align: center;
+  overflow-wrap: anywhere;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: var(--app-pill-radius);
+  box-shadow: 0 12px 32px rgb(25 30 52 / 22%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   z-index: 9999;
 }
 
 .bottom-notify.error {
-  background: rgba(238, 10, 36, 0.85);
+  background: rgb(214 67 91 / 92%);
 }
 
 .bottom-notify.success {
-  background: rgba(7, 193, 96, 0.85);
+  background: rgb(24 157 104 / 92%);
 }
 
 .notify-enter-active,
@@ -211,5 +259,32 @@ onBeforeUnmount(() => {
 .notify-leave-to {
   opacity: 0;
   transform: translateX(-50%) translateY(20px);
+}
+
+.page-enter-active,
+.page-leave-active {
+  transition:
+    opacity var(--app-duration-fast) ease,
+    transform var(--app-duration) var(--app-ease);
+}
+
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(5px);
+}
+
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-3px);
+}
+
+@media (min-width: 600px) {
+  .basic-layout {
+    max-width: 480px;
+  }
+
+  .bottom-notify {
+    right: auto;
+  }
 }
 </style>

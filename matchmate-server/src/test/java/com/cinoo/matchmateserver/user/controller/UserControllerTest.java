@@ -1,6 +1,7 @@
 package com.cinoo.matchmateserver.user.controller;
 
 import com.cinoo.matchmateserver.common.ErrorCode;
+import com.cinoo.matchmateserver.common.PageResponse;
 import com.cinoo.matchmateserver.exception.BusinessException;
 import com.cinoo.matchmateserver.exception.GlobalExceptionHandler;
 import com.cinoo.matchmateserver.user.model.vo.UserVO;
@@ -144,16 +145,44 @@ class UserControllerTest {
 
     @Test
     void searchUsersSupportsKeywordAndTags() throws Exception {
-        when(userService.searchUserByTags("玉桂狗", java.util.List.of("咖啡")))
-                .thenReturn(java.util.List.of());
+        when(userService.searchUserByTags(
+                eq("玉桂狗"),
+                eq(java.util.List.of("咖啡")),
+                eq(2L),
+                eq(10L),
+                any()
+        )).thenReturn(new PageResponse<>(0, 2, 10, java.util.List.of()));
 
         mockMvc.perform(get("/user/search/tags")
                         .param("keyword", "玉桂狗")
-                        .param("tagList", "咖啡"))
+                        .param("tagList", "咖啡")
+                        .param("pageNum", "2")
+                        .param("pageSize", "10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0));
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.pageNum").value(2));
 
-        verify(userService).searchUserByTags("玉桂狗", java.util.List.of("咖啡"));
+        verify(userService).searchUserByTags(
+                eq("玉桂狗"),
+                eq(java.util.List.of("咖啡")),
+                eq(2L),
+                eq(10L),
+                any()
+        );
+    }
+
+    @Test
+    void recommendUsersSupportsPagination() throws Exception {
+        when(userService.recommendUsers(eq(1L), eq(10L), any()))
+                .thenReturn(new PageResponse<>(0, 1, 10, java.util.List.of()));
+
+        mockMvc.perform(get("/user/recommend")
+                        .param("pageNum", "1")
+                        .param("pageSize", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pageSize").value(10));
+
+        verify(userService).recommendUsers(eq(1L), eq(10L), any());
     }
 
     @Test

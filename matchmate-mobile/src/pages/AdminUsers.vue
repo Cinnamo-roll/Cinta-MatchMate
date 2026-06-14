@@ -186,20 +186,21 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .admin-users-page {
-  min-height: calc(100dvh - var(--van-nav-bar-height, 46px));
-  padding: 66px 12px 24px;
-  background: #f7f8fa;
+  min-height: calc(100dvh - var(--app-nav-height));
+  padding: 0 var(--app-page-padding) 24px;
+  background: var(--app-bg);
   box-sizing: border-box;
 }
 
 .admin-search {
-  position: fixed;
-  top: var(--van-nav-bar-height, 46px);
-  right: 0;
-  left: 0;
+  position: sticky;
+  top: 0;
   z-index: 99;
-  padding: 8px 12px;
-  background: #f7f8fa;
+  margin: 0 calc(var(--app-page-padding) * -1);
+  padding: 10px var(--app-page-padding);
+  background: rgb(244 246 251 / 94%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 .admin-search :deep(.van-search) {
@@ -221,10 +222,11 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 10px rgb(0 0 0 / 4%);
+  padding: 14px 15px;
+  background: var(--app-surface);
+  border: 1px solid rgb(255 255 255 / 76%);
+  border-radius: var(--app-card-radius);
+  box-shadow: var(--app-shadow-sm);
 }
 
 .avatar-wrap {
@@ -240,8 +242,8 @@ onBeforeUnmount(() => {
   bottom: 0;
   width: 11px;
   height: 11px;
-  background: #07c160;
-  border: 2px solid #fff;
+  background: var(--app-success);
+  border: 2px solid var(--app-surface);
   border-radius: 50%;
 }
 
@@ -268,7 +270,7 @@ onBeforeUnmount(() => {
   display: block;
   margin-top: 4px;
   overflow: hidden;
-  color: #969799;
+  color: var(--app-text-muted);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -278,19 +280,19 @@ onBeforeUnmount(() => {
 .status-badge {
   flex-shrink: 0;
   padding: 2px 6px;
-  color: #07c160;
+  color: var(--app-success);
   font-size: 10px;
-  background: #e8f8ef;
+  background: var(--app-accent-soft);
   border-radius: 7px;
 }
 
 .role-badge {
-  color: #1989fa;
-  background: #ecf9ff;
+  color: var(--app-primary);
+  background: var(--app-primary-soft);
 }
 
 .status-badge.banned {
-  color: #ee0a24;
+  color: var(--app-danger);
   background: #fff0f0;
 }
 
@@ -300,7 +302,7 @@ onBeforeUnmount(() => {
 
 .list-end {
   margin: 6px 0 0;
-  color: #969799;
+  color: var(--app-text-muted);
   font-size: 12px;
   text-align: center;
 }

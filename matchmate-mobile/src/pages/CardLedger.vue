@@ -137,38 +137,40 @@ const formatDate = (value: string) =>
   <div class="card-home">
     <van-loading v-if="checking" class="page-loading" vertical>加载中...</van-loading>
     <template v-else>
-      <div v-if="loadFailed" class="error-bar">
-        <van-icon name="warning-o" size="16" />
-        <span>网络异常，请重试</span>
-        <van-button size="small" round type="primary" @click="loadData">重试</van-button>
-      </div>
-      <div class="user-stat-card" v-if="currentUser">
-        <van-image round width="48" height="48" fit="cover" :src="currentUser.avatarUrl || undefined">
-          <template #error><van-icon name="contact" size="24" color="#c8c9cc" /></template>
-        </van-image>
-        <div class="user-stat-info">
-          <strong>{{ currentUser.username || currentUser.userAccount }}</strong>
-          <span>赢得金额 <b>{{ currentUser.totalScore ?? 0 }}</b> 元</span>
+      <div class="card-fixed">
+        <div v-if="loadFailed" class="error-bar">
+          <van-icon name="warning-o" size="16" />
+          <span>网络异常，请重试</span>
+          <van-button size="small" round type="primary" @click="loadData">重试</van-button>
         </div>
-        <div class="user-stat-detail">
-          <span>胜 {{ currentUser.wins ?? 0 }}</span>
-          <span>负 {{ currentUser.losses ?? 0 }}</span>
-          <span>{{ currentUser.winRate ? (currentUser.winRate * 100).toFixed(1) : '0.0' }}%</span>
+        <div class="user-stat-card" v-if="currentUser">
+          <van-image round width="48" height="48" fit="cover" :src="currentUser.avatarUrl || undefined">
+            <template #error><van-icon name="contact" size="24" color="#c8c9cc" /></template>
+          </van-image>
+          <div class="user-stat-info">
+            <strong>{{ currentUser.username || currentUser.userAccount }}</strong>
+            <span>赢得金额 <b>{{ currentUser.totalScore ?? 0 }}</b> 元</span>
+          </div>
+          <div class="user-stat-detail">
+            <span>胜 {{ currentUser.wins ?? 0 }}</span>
+            <span>负 {{ currentUser.losses ?? 0 }}</span>
+            <span>{{ currentUser.winRate ? (currentUser.winRate * 100).toFixed(1) : '0.0' }}%</span>
+          </div>
         </div>
-      </div>
-      <div v-if="loginRequired || (!currentUser && !loadFailed)" class="login-hint">
-        <span>登录后可查看自己的牌局账本</span>
-        <van-button size="small" round type="primary" @click="goToLogin">去登录</van-button>
-      </div>
-      <div class="action-grid" v-if="currentUser">
-        <button class="action-btn create-btn" @click="handleCreate" :disabled="loading">
-          <van-icon name="add-o" size="24" />
-          <span>我要开房</span>
-        </button>
-        <button class="action-btn join-btn" @click="showJoin = true" :disabled="loading">
-          <van-icon name="friends-o" size="24" />
-          <span>加入房间</span>
-        </button>
+        <div v-if="loginRequired || (!currentUser && !loadFailed)" class="login-hint">
+          <span>登录后可查看自己的牌局账本</span>
+          <van-button size="small" round type="primary" @click="goToLogin">去登录</van-button>
+        </div>
+        <div class="action-grid" v-if="currentUser">
+          <button class="action-btn create-btn" @click="handleCreate" :disabled="loading">
+            <van-icon name="add-o" size="24" />
+            <span>我要开房</span>
+          </button>
+          <button class="action-btn join-btn" @click="showJoin = true" :disabled="loading">
+            <van-icon name="friends-o" size="24" />
+            <span>加入房间</span>
+          </button>
+        </div>
       </div>
       <div class="bottom-sections" v-if="currentUser">
         <section class="overview-section">
@@ -226,101 +228,285 @@ const formatDate = (value: string) =>
 
 <style scoped>
 .card-home {
-  position: fixed;
-  top: var(--van-nav-bar-height, 46px);
-  left: 0;
-  right: 0;
-  bottom: 0;
   display: flex;
   flex-direction: column;
-  padding: 12px 16px 0;
-  background: #f7f8fa;
-  box-sizing: border-box;
+  height: calc(100dvh - var(--app-nav-height));
+  min-height: 0;
+  padding: 14px var(--app-page-padding) calc(28px + var(--app-safe-bottom));
   overflow: hidden;
+  background: var(--app-bg);
+  box-sizing: border-box;
 }
-.page-loading { padding-top: 120px; }
+
+.card-fixed {
+  flex: 0 0 auto;
+}
+
+.page-loading {
+  padding-top: 120px;
+}
+
 .error-bar {
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 14px; margin-bottom: 10px; flex-shrink: 0;
-  background: #fff3f0; border-radius: 10px;
-  color: #ee0a24; font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  color: var(--app-danger);
+  font-size: 13px;
+  background: #fff0f2;
+  border: 1px solid #ffdce2;
+  border-radius: 14px;
 }
-.error-bar .van-icon { flex-shrink: 0; }
-.error-bar span { flex: 1; }
+
+.error-bar .van-icon {
+  flex-shrink: 0;
+}
+
+.error-bar span {
+  flex: 1;
+}
+
 .user-stat-card {
-  display: flex; align-items: center; gap: 12px;
-  padding: 16px; flex-shrink: 0;
-  background: linear-gradient(135deg, #1989fa, #07c160);
-  border-radius: 14px; color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 88% 12%, rgb(255 255 255 / 18%) 0 44px, transparent 45px),
+    linear-gradient(135deg, #5968e9 0%, #6b63df 58%, #28aa9b 120%);
+  border-radius: 24px;
+  box-shadow: 0 16px 34px rgb(89 104 233 / 20%);
 }
-.user-stat-info { flex: 1; display: flex; flex-direction: column; gap: 4px; }
-.user-stat-info strong { font-size: 16px; }
-.user-stat-info span { font-size: 13px; opacity: .9; }
-.user-stat-info b { font-size: 18px; }
-.user-stat-detail { display: flex; flex-direction: column; gap: 2px; font-size: 12px; opacity: .85; }
+
+.user-stat-info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.user-stat-info strong {
+  overflow: hidden;
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-stat-info span {
+  font-size: 13px;
+  opacity: .88;
+}
+
+.user-stat-info b {
+  font-size: 19px;
+}
+
+.user-stat-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex-shrink: 0;
+  font-size: 12px;
+  text-align: right;
+  opacity: .84;
+}
+
 .login-hint {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 20px 16px; flex-shrink: 0; background: #fff;
-  border-radius: 14px; color: #969799; font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 16px;
+  color: var(--app-text-secondary);
+  font-size: 14px;
+  background: var(--app-surface);
+  border-radius: var(--app-card-radius);
+  box-shadow: var(--app-shadow-sm);
 }
+
 .action-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
-  margin: 12px 0; flex-shrink: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 14px 0;
 }
+
 .action-btn {
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
-  padding: 24px 16px; border: 0; border-radius: 14px;
-  font-size: 15px; cursor: pointer; transition: opacity .2s;
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 108px;
+  padding: 18px;
+  font-size: 15px;
+  font-weight: 700;
+  border: 0;
+  border-radius: var(--app-card-radius);
+  cursor: pointer;
+  transition:
+    opacity var(--app-duration-fast) ease,
+    transform var(--app-duration-fast) var(--app-ease);
 }
-.action-btn:active { opacity: .8; }
-.action-btn:disabled { opacity: .5; }
-.create-btn { background: #1989fa; color: #fff; }
-.join-btn { background: #fff; color: #323233; box-shadow: 0 2px 8px rgb(0 0 0 / 6%); }
+
+.action-btn:active {
+  transform: scale(.98);
+}
+
+.action-btn:disabled {
+  opacity: .5;
+}
+
+.create-btn {
+  color: #fff;
+  background: var(--app-primary);
+  box-shadow: 0 12px 26px rgb(89 104 233 / 20%);
+}
+
+.join-btn {
+  color: var(--app-text);
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  box-shadow: var(--app-shadow-sm);
+}
+
 .bottom-sections {
-  flex: 1; display: flex; flex-direction: column; gap: 8px;
-  min-height: 0; padding-bottom: 16px;
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-rows: minmax(0, .82fr) minmax(0, 1fr);
+  gap: 12px;
+  min-height: 0;
 }
+
 .overview-section {
-  flex: 1; min-height: 0; padding: 10px 14px;
-  background: #fff; border-radius: 14px;
-  display: flex; flex-direction: column;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 16px;
+  background: var(--app-surface);
+  border-radius: var(--app-card-radius);
+  box-shadow: var(--app-shadow-sm);
 }
-.section-title { margin-bottom: 6px; flex-shrink: 0; color: #323233; font-size: 15px; font-weight: 600; }
+
+.section-title {
+  margin-bottom: 8px;
+  color: var(--app-text);
+  font-size: 16px;
+  font-weight: 700;
+}
+
 .section-title-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
-.section-title-row .section-title { margin-bottom: 6px; }
-.retention-hint { color: #969799; font-size: 11px; }
-.rank-scroll {
-  flex: 1; min-height: 0; overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+
+.retention-hint,
+.ranking-index,
+.history-item small,
+.hint-sub {
+  color: var(--app-text-muted);
 }
+
+.retention-hint {
+  font-size: 11px;
+}
+
+.rank-scroll,
 .history-scroll {
-  flex: 1; min-height: 0; overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+
+.rank-scroll::-webkit-scrollbar,
+.history-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 .ranking-item {
-  display: flex; align-items: center; gap: 10px;
-  min-height: 46px; border-bottom: 1px solid #f5f5f5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  border-bottom: 1px solid var(--app-border);
 }
-.ranking-item:last-child { border-bottom: 0; }
-.ranking-index { width: 20px; color: #969799; text-align: center; font-size: 13px; }
-.ranking-name { flex: 1; min-width: 0; overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
-.ranking-item b { color: #1989fa; font-size: 15px; }
+
+.ranking-item:last-child,
+.history-item:last-child {
+  border-bottom: 0;
+}
+
+.ranking-index {
+  width: 20px;
+  font-size: 13px;
+  text-align: center;
+}
+
+.ranking-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ranking-item b {
+  color: var(--app-primary);
+  font-size: 15px;
+}
+
 .history-item {
-  display: flex; align-items: center; justify-content: space-between;
-  width: 100%; min-height: 46px; padding: 6px 0;
-  color: #323233; text-align: left; background: transparent;
-  border: 0; border-bottom: 1px solid #f5f5f5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 54px;
+  padding: 7px 0;
+  color: var(--app-text);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--app-border);
 }
-.history-item:last-child { border-bottom: 0; }
-.history-item span { display: flex; flex-direction: column; gap: 3px; }
-.history-item strong { font-size: 15px; }
-.history-item small { color: #969799; font-size: 12px; }
-.history-item b { font-size: 16px; }
-.positive { color: #07c160; }
-.negative { color: #ee0a24; }
-.hint-sub { color: #969799; font-size: 13px; }
+
+.history-item span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.history-item strong {
+  font-size: 14px;
+}
+
+.history-item small {
+  font-size: 12px;
+}
+
+.history-item b {
+  flex-shrink: 0;
+  font-size: 16px;
+}
+
+.positive {
+  color: var(--app-success);
+}
+
+.negative {
+  color: var(--app-danger);
+}
+
+.hint-sub {
+  font-size: 13px;
+}
 </style>
