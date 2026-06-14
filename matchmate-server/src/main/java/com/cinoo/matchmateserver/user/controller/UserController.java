@@ -12,8 +12,11 @@ import com.cinoo.matchmateserver.user.model.request.UpdateUserTagsRequest;
 import com.cinoo.matchmateserver.user.model.request.DeleteAccountRequest;
 import com.cinoo.matchmateserver.user.model.request.UpdateUserProfileRequest;
 import com.cinoo.matchmateserver.user.model.request.UpdatePasswordRequest;
+import com.cinoo.matchmateserver.user.model.request.UpdateRegistrationLimitRequest;
 import com.cinoo.matchmateserver.user.model.request.UpdateUserStatusRequest;
+import com.cinoo.matchmateserver.user.model.vo.RegistrationPolicyVO;
 import com.cinoo.matchmateserver.user.model.vo.UserRecommendationVO;
+import com.cinoo.matchmateserver.user.model.vo.UserRegisterResultVO;
 import com.cinoo.matchmateserver.user.model.vo.UserVO;
 import com.cinoo.matchmateserver.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,13 +42,13 @@ public class UserController {
 
     @Operation(summary = "用户注册", description = "用户注册接口")
     @PostMapping("/register")
-    public BaseResponse<Long> userRegister(@Valid @RequestBody UserRegisterRequest request) {
-        long userId = userService.userRegister(
+    public BaseResponse<UserRegisterResultVO> userRegister(@Valid @RequestBody UserRegisterRequest request) {
+        UserRegisterResultVO result = userService.userRegister(
                 request.getUserAccount(),
                 request.getUserPassword(),
                 request.getCheckPassword()
         );
-        return ResultUtils.success(userId);
+        return ResultUtils.success(result);
     }
 
     @Operation(summary = "用户登录", description = "用户登录接口")
@@ -129,6 +132,51 @@ public class UserController {
             @Valid @RequestBody UpdateUserStatusRequest updateRequest,
             HttpServletRequest request) {
         userService.updateUserStatus(id, updateRequest.getUserStatus(), request);
+        return ResultUtils.success(null);
+    }
+
+    @Operation(summary = "获取注册审核策略", description = "管理员查看每日注册限额和待审核数量")
+    @GetMapping("/registration/policy")
+    public BaseResponse<RegistrationPolicyVO> getRegistrationPolicy(HttpServletRequest request) {
+        return ResultUtils.success(userService.getRegistrationPolicy(request));
+    }
+
+    @Operation(summary = "更新每日注册限额", description = "管理员调整每日自动通过注册人数")
+    @PutMapping("/registration/policy")
+    public BaseResponse<RegistrationPolicyVO> updateRegistrationPolicy(
+            @Valid @RequestBody UpdateRegistrationLimitRequest updateRequest,
+            HttpServletRequest request) {
+        return ResultUtils.success(
+                userService.updateRegistrationDailyLimit(updateRequest.getDailyLimit(), request)
+        );
+    }
+
+    @Operation(summary = "注册审核列表", description = "分页查看待管理员审核的注册申请")
+    @GetMapping("/registration/pending")
+    public BaseResponse<PageResponse<UserVO>> listPendingRegistrations(
+            @RequestParam(defaultValue = "1") long pageNum,
+            @RequestParam(defaultValue = "20") long pageSize,
+            HttpServletRequest request) {
+        return ResultUtils.success(
+                userService.listPendingRegistrations(pageNum, pageSize, request)
+        );
+    }
+
+    @Operation(summary = "同意注册申请", description = "管理员同意待审核用户注册")
+    @PutMapping("/registration/{id}/approve")
+    public BaseResponse<Void> approveRegistration(
+            @PathVariable long id,
+            HttpServletRequest request) {
+        userService.approveRegistration(id, request);
+        return ResultUtils.success(null);
+    }
+
+    @Operation(summary = "拒绝注册申请", description = "管理员拒绝并删除本次注册申请")
+    @PutMapping("/registration/{id}/reject")
+    public BaseResponse<Void> rejectRegistration(
+            @PathVariable long id,
+            HttpServletRequest request) {
+        userService.rejectRegistration(id, request);
         return ResultUtils.success(null);
     }
 

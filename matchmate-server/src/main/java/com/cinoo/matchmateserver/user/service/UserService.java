@@ -3,7 +3,9 @@ package com.cinoo.matchmateserver.user.service;
 import com.cinoo.matchmateserver.common.PageResponse;
 import com.cinoo.matchmateserver.user.model.entity.User;
 import com.cinoo.matchmateserver.user.model.request.UpdateUserProfileRequest;
+import com.cinoo.matchmateserver.user.model.vo.RegistrationPolicyVO;
 import com.cinoo.matchmateserver.user.model.vo.UserRecommendationVO;
+import com.cinoo.matchmateserver.user.model.vo.UserRegisterResultVO;
 import com.cinoo.matchmateserver.user.model.vo.UserVO;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.multipart.MultipartFile;
@@ -21,9 +23,9 @@ public interface UserService {
      * @param userAccount 用户账号
      * @param userPassword 用户密码
      * @param checkPassword 校验密码
-     * @return 新用户 id
+     * @return 注册结果
      */
-    long userRegister(String userAccount, String userPassword, String checkPassword);
+    UserRegisterResultVO userRegister(String userAccount, String userPassword, String checkPassword);
 
     /**
      * 用户登录
@@ -84,6 +86,23 @@ public interface UserService {
      * @param request HTTP 请求
      */
     void updateUserStatus(long userId, int userStatus, HttpServletRequest request);
+
+    RegistrationPolicyVO getRegistrationPolicy(HttpServletRequest request);
+
+    RegistrationPolicyVO updateRegistrationDailyLimit(
+            int dailyLimit,
+            HttpServletRequest request
+    );
+
+    PageResponse<UserVO> listPendingRegistrations(
+            long pageNum,
+            long pageSize,
+            HttpServletRequest request
+    );
+
+    void approveRegistration(long userId, HttpServletRequest request);
+
+    void rejectRegistration(long userId, HttpServletRequest request);
 
     /**
      * 用户登出。

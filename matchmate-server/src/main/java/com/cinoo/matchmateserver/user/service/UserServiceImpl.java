@@ -13,7 +13,9 @@ import com.cinoo.matchmateserver.exception.BusinessException;
 import com.cinoo.matchmateserver.user.mapper.UserMapper;
 import com.cinoo.matchmateserver.user.model.entity.User;
 import com.cinoo.matchmateserver.user.model.request.UpdateUserProfileRequest;
+import com.cinoo.matchmateserver.user.model.vo.RegistrationPolicyVO;
 import com.cinoo.matchmateserver.user.model.vo.UserRecommendationVO;
+import com.cinoo.matchmateserver.user.model.vo.UserRegisterResultVO;
 import com.cinoo.matchmateserver.user.model.vo.UserVO;
 import com.cinoo.matchmateserver.user.service.PasswordService;
 import com.cinoo.matchmateserver.tag.service.TagService;
@@ -31,8 +33,11 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Objects;
@@ -51,6 +56,8 @@ public class UserServiceImpl implements UserService {
     private static final long MAX_PAGE_SIZE = 100;
     private static final int MAX_RECOMMENDATION_CANDIDATES = 200;
     private static final int MAX_SEARCH_TAGS = 3;
+    private static final int DEFAULT_DAILY_REGISTRATION_LIMIT = 20;
+    private static final String REGISTRATION_DAILY_LIMIT_KEY = "registration.daily.limit";
     private static final Pattern ACCOUNT_PATTERN = Pattern.compile("^[a-zA-Z0-9]{4,16}$");
 
     private final UserMapper userMapper;
@@ -82,7 +89,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public long userRegister(String userAccount, String userPassword, String checkPassword) {
+    public UserRegisterResultVO userRegister(String userAccount, String userPassword, String checkPassword) {
         String normalizedAccount = normalizeAccount(userAccount);
         validateAccountAndPassword(normalizedAccount, userPassword);
         if (!userPassword.equals(checkPassword)) {
@@ -98,6 +105,10 @@ public class UserServiceImpl implements UserService {
         user.setUsername(normalizedAccount);
         user.setGender(UserConstant.DEFAULT_GENDER);
         user.setUserPassword(passwordService.encode(userPassword));
+        boolean pendingReview = shouldEnterRegistrationReview();
+        user.setUserStatus(pendingReview
+                ? UserConstant.PENDING_REVIEW_STATUS
+                : UserConstant.NORMAL_STATUS);
 
         try {
             int insertedRows = userMapper.insert(user);
@@ -108,7 +119,10 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "用户已存在");
         }
         cacheInvalidationService.userCollectionChanged();
-        return user.getId();
+        String message = pendingReview
+                ? "今日注册名额已满，申请已提交给管理员审核"
+                : "注册成功";
+        return new UserRegisterResultVO(user.getId(), pendingReview, message);
     }
 
     @Override
@@ -120,6 +134,9 @@ public class UserServiceImpl implements UserService {
         if (user == null || !passwordService.matches(userPassword, user.getUserPassword())) {
             log.info("User login failed, account={}", normalizedAccount);
             throw new BusinessException(ErrorCode.PARAM_ERROR, "用户不存在或密码错误");
+        }
+        if (Objects.equals(user.getUserStatus(), UserConstant.PENDING_REVIEW_STATUS)) {
+            throw new BusinessException(ErrorCode.NO_AUTH, "注册申请正在等待管理员审核");
         }
         if (!isActive(user)) {
             throw new BusinessException(ErrorCode.NO_AUTH, "账号已被封禁，请联系管理员");
@@ -253,6 +270,9 @@ public class UserServiceImpl implements UserService {
         if (Objects.equals(targetUser.getUserRole(), UserConstant.ADMIN_ROLE)) {
             throw new BusinessException(ErrorCode.NO_AUTH, "不能修改管理员账号状态");
         }
+        if (Objects.equals(targetUser.getUserStatus(), UserConstant.PENDING_REVIEW_STATUS)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "待审核注册请在注册审核中处理");
+        }
         if (Objects.equals(targetUser.getUserStatus(), userStatus)) {
             return;
         }
@@ -275,6 +295,72 @@ public class UserServiceImpl implements UserService {
                 log.warn("Failed to clear online state for banned userId={}", userId, e);
             }
         }
+    }
+
+    @Override
+    public RegistrationPolicyVO getRegistrationPolicy(HttpServletRequest request) {
+        requireAdmin(request);
+        return buildRegistrationPolicy();
+    }
+
+    @Override
+    public RegistrationPolicyVO updateRegistrationDailyLimit(
+            int dailyLimit,
+            HttpServletRequest request) {
+        requireAdmin(request);
+        if (dailyLimit < 0 || dailyLimit > 1000) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "每日注册限额不合法");
+        }
+        userMapper.upsertAppSetting(
+                REGISTRATION_DAILY_LIMIT_KEY,
+                String.valueOf(dailyLimit)
+        );
+        return buildRegistrationPolicy();
+    }
+
+    @Override
+    public PageResponse<UserVO> listPendingRegistrations(
+            long pageNum,
+            long pageSize,
+            HttpServletRequest request) {
+        requireAdmin(request);
+        validatePageParameters(pageNum, pageSize);
+        Page<User> userPage = userMapper.selectUsersByStatus(
+                new Page<>(pageNum, pageSize),
+                UserConstant.PENDING_REVIEW_STATUS
+        );
+        List<UserVO> records = userPage.getRecords().stream()
+                .map(this::toUserVO)
+                .toList();
+        return new PageResponse<>(
+                userPage.getTotal(),
+                userPage.getCurrent(),
+                userPage.getSize(),
+                records
+        );
+    }
+
+    @Override
+    public void approveRegistration(long userId, HttpServletRequest request) {
+        requireAdmin(request);
+        User pendingUser = getPendingRegistrationUser(userId);
+        User updateUser = new User();
+        updateUser.setId(pendingUser.getId());
+        updateUser.setUserStatus(UserConstant.NORMAL_STATUS);
+        if (userMapper.updateById(updateUser) != 1) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "注册审核通过失败");
+        }
+        cacheInvalidationService.userChanged(userId);
+    }
+
+    @Override
+    public void rejectRegistration(long userId, HttpServletRequest request) {
+        requireAdmin(request);
+        User pendingUser = getPendingRegistrationUser(userId);
+        if (userMapper.deleteById(pendingUser.getId()) != 1) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "注册申请拒绝失败");
+        }
+        cacheInvalidationService.userDeleted(userId);
     }
 
     @Override
@@ -527,6 +613,67 @@ public class UserServiceImpl implements UserService {
         return userMapper.selectCount(accountQuery(userAccount)) > 0;
     }
 
+    private boolean shouldEnterRegistrationReview() {
+        int dailyLimit = getRegistrationDailyLimit();
+        if (dailyLimit <= 0) {
+            return true;
+        }
+        return countApprovedRegistrationsToday() >= dailyLimit;
+    }
+
+    private RegistrationPolicyVO buildRegistrationPolicy() {
+        return new RegistrationPolicyVO(
+                getRegistrationDailyLimit(),
+                countApprovedRegistrationsToday(),
+                userMapper.countUsersByStatus(UserConstant.PENDING_REVIEW_STATUS)
+        );
+    }
+
+    private int getRegistrationDailyLimit() {
+        Integer dailyLimit = userMapper.selectAppSettingInt(REGISTRATION_DAILY_LIMIT_KEY);
+        return dailyLimit == null ? DEFAULT_DAILY_REGISTRATION_LIMIT : Math.max(0, dailyLimit);
+    }
+
+    private long countApprovedRegistrationsToday() {
+        RegistrationDayRange range = todayRange();
+        Long count = userMapper.countRegistrationsByStatusAndTimeRange(
+                UserConstant.NORMAL_STATUS,
+                range.startTime(),
+                range.endTime()
+        );
+        return count == null ? 0L : count;
+    }
+
+    private RegistrationDayRange todayRange() {
+        ZoneId zoneId = ZoneId.systemDefault();
+        LocalDate today = LocalDate.now(zoneId);
+        Date startTime = Date.from(today.atStartOfDay(zoneId).toInstant());
+        Date endTime = Date.from(today.plusDays(1).atStartOfDay(zoneId).toInstant());
+        return new RegistrationDayRange(startTime, endTime);
+    }
+
+    private User requireAdmin(HttpServletRequest request) {
+        User admin = getLoginUser(request);
+        if (!Objects.equals(admin.getUserRole(), UserConstant.ADMIN_ROLE)) {
+            throw new BusinessException(ErrorCode.NO_AUTH);
+        }
+        return admin;
+    }
+
+    private User getPendingRegistrationUser(long userId) {
+        if (userId <= 0) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "用户 id 不合法");
+        }
+        User user = userMapper.selectById(userId);
+        if (user == null || Objects.equals(user.getIsDelete(), 1)) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "注册申请不存在");
+        }
+        if (!Objects.equals(user.getUserStatus(), UserConstant.PENDING_REVIEW_STATUS)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "该用户不在注册审核中");
+        }
+        return user;
+    }
+
     private User findByAccount(String userAccount) {
         return userMapper.selectOne(accountQuery(userAccount));
     }
@@ -594,5 +741,8 @@ public class UserServiceImpl implements UserService {
             int score,
             String reason,
             List<String> commonTags) {
+    }
+
+    private record RegistrationDayRange(Date startTime, Date endTime) {
     }
 }

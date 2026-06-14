@@ -40,3 +40,14 @@ CREATE TABLE IF NOT EXISTS card_undo_approval (
     UNIQUE KEY uk_request_user (request_id, user_id),
     INDEX idx_request_id (request_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='card ledger undo approval';
+
+-- Lightweight application settings.
+CREATE TABLE IF NOT EXISTS app_setting (
+    setting_key VARCHAR(64) PRIMARY KEY,
+    setting_value VARCHAR(255) NOT NULL,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='application setting';
+
+INSERT INTO app_setting (setting_key, setting_value)
+VALUES ('registration.daily.limit', '20')
+ON DUPLICATE KEY UPDATE setting_key = setting_key;

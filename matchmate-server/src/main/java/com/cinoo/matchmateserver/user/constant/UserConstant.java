@@ -18,5 +18,7 @@ public final class UserConstant {
 
     public static final int BANNED_STATUS = 1;
 
+    public static final int PENDING_REVIEW_STATUS = 2;
+
     public static final int DEFAULT_GENDER = 1;
 }

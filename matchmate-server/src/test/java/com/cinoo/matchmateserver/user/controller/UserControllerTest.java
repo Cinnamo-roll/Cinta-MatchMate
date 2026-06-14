@@ -4,6 +4,8 @@ import com.cinoo.matchmateserver.common.ErrorCode;
 import com.cinoo.matchmateserver.common.PageResponse;
 import com.cinoo.matchmateserver.exception.BusinessException;
 import com.cinoo.matchmateserver.exception.GlobalExceptionHandler;
+import com.cinoo.matchmateserver.user.model.vo.RegistrationPolicyVO;
+import com.cinoo.matchmateserver.user.model.vo.UserRegisterResultVO;
 import com.cinoo.matchmateserver.user.model.vo.UserVO;
 import com.cinoo.matchmateserver.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,7 +37,8 @@ class UserControllerTest {
 
     @Test
     void registerReturnsUserId() throws Exception {
-        when(userService.userRegister("testuser", "12345678", "12345678")).thenReturn(10L);
+        when(userService.userRegister("testuser", "12345678", "12345678"))
+                .thenReturn(new UserRegisterResultVO(10L, false, "注册成功"));
 
         mockMvc.perform(post("/user/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -48,7 +51,8 @@ class UserControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data").value(10));
+                .andExpect(jsonPath("$.data.userId").value(10))
+                .andExpect(jsonPath("$.data.pendingReview").value(false));
     }
 
     @Test
@@ -141,6 +145,53 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.code").value(ErrorCode.PARAM_ERROR.getCode()));
 
         verify(userService, never()).updateUserStatus(anyLong(), anyInt(), any());
+    }
+
+    @Test
+    void registrationPolicyReturnsAdminSummary() throws Exception {
+        when(userService.getRegistrationPolicy(any()))
+                .thenReturn(new RegistrationPolicyVO(20, 5L, 2L));
+
+        mockMvc.perform(get("/user/registration/policy"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.dailyLimit").value(20))
+                .andExpect(jsonPath("$.data.pendingCount").value(2));
+    }
+
+    @Test
+    void updateRegistrationPolicyUsesValidatedRequest() throws Exception {
+        when(userService.updateRegistrationDailyLimit(eq(12), any()))
+                .thenReturn(new RegistrationPolicyVO(12, 5L, 2L));
+
+        mockMvc.perform(put("/user/registration/policy")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "dailyLimit": 12
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.dailyLimit").value(12));
+
+        verify(userService).updateRegistrationDailyLimit(eq(12), any());
+    }
+
+    @Test
+    void approveRegistrationUsesPathUserId() throws Exception {
+        mockMvc.perform(put("/user/registration/10/approve"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+
+        verify(userService).approveRegistration(eq(10L), any());
+    }
+
+    @Test
+    void rejectRegistrationUsesPathUserId() throws Exception {
+        mockMvc.perform(put("/user/registration/10/reject"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+
+        verify(userService).rejectRegistration(eq(10L), any());
     }
 
     @Test

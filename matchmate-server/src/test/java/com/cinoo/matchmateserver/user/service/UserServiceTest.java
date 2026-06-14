@@ -11,6 +11,7 @@ import com.cinoo.matchmateserver.user.mapper.UserMapper;
 import com.cinoo.matchmateserver.user.model.entity.User;
 import com.cinoo.matchmateserver.user.model.request.UpdateUserProfileRequest;
 import com.cinoo.matchmateserver.user.model.vo.UserRecommendationVO;
+import com.cinoo.matchmateserver.user.model.vo.UserRegisterResultVO;
 import com.cinoo.matchmateserver.user.model.vo.UserVO;
 import com.cinoo.matchmateserver.user.service.UserServiceImpl;
 import com.cinoo.matchmateserver.infrastructure.oss.OssUtils;
@@ -71,6 +72,9 @@ class UserServiceTest {
                     Supplier<?> loader = invocation.getArgument(2);
                     return loader.get();
                 });
+        lenient().when(userMapper.selectAppSettingInt(anyString())).thenReturn(20);
+        lenient().when(userMapper.countRegistrationsByStatusAndTimeRange(anyInt(), any(), any()))
+                .thenReturn(0L);
         userService = new UserServiceImpl(
                 userMapper,
                 passwordService,
@@ -92,16 +96,39 @@ class UserServiceTest {
             return 1;
         });
 
-        long userId = userService.userRegister(ACCOUNT, PASSWORD, PASSWORD);
+        UserRegisterResultVO result = userService.userRegister(ACCOUNT, PASSWORD, PASSWORD);
 
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
         verify(userMapper).insert(captor.capture());
-        assertEquals(10L, userId);
+        assertEquals(10L, result.getUserId());
+        assertFalse(result.getPendingReview());
+        assertEquals(UserConstant.NORMAL_STATUS, captor.getValue().getUserStatus());
         assertNotEquals(PASSWORD, captor.getValue().getUserPassword());
         assertEquals(ACCOUNT, captor.getValue().getUsername());
         assertEquals(UserConstant.DEFAULT_GENDER, captor.getValue().getGender());
         assertTrue(passwordService.matches(PASSWORD, captor.getValue().getUserPassword()));
         verify(cacheInvalidationService).userCollectionChanged();
+    }
+
+    @Test
+    void registerExceedingDailyLimitEntersPendingReview() {
+        when(userMapper.selectCount(any())).thenReturn(0L);
+        when(userMapper.selectAppSettingInt(anyString())).thenReturn(1);
+        when(userMapper.countRegistrationsByStatusAndTimeRange(eq(UserConstant.NORMAL_STATUS), any(), any()))
+                .thenReturn(1L);
+        when(userMapper.insert(any(User.class))).thenAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            user.setId(11L);
+            return 1;
+        });
+
+        UserRegisterResultVO result = userService.userRegister(ACCOUNT, PASSWORD, PASSWORD);
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userMapper).insert(captor.capture());
+        assertEquals(11L, result.getUserId());
+        assertTrue(result.getPendingReview());
+        assertEquals(UserConstant.PENDING_REVIEW_STATUS, captor.getValue().getUserStatus());
     }
 
     @Test
@@ -185,6 +212,22 @@ class UserServiceTest {
 
         assertEquals(ErrorCode.NO_AUTH.getCode(), exception.getCode());
         assertEquals("账号已被封禁，请联系管理员", exception.getDescription());
+    }
+
+    @Test
+    void loginRejectsPendingRegistration() {
+        User user = activeUser();
+        user.setUserStatus(UserConstant.PENDING_REVIEW_STATUS);
+        user.setUserPassword(passwordService.encode(PASSWORD));
+        when(userMapper.selectOne(any())).thenReturn(user);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> userService.doLogin(ACCOUNT, PASSWORD, new MockHttpServletRequest())
+        );
+
+        assertEquals(ErrorCode.NO_AUTH.getCode(), exception.getCode());
+        assertEquals("注册申请正在等待管理员审核", exception.getDescription());
     }
 
     @Test
@@ -431,6 +474,30 @@ class UserServiceTest {
                 contains("封禁")
         );
         verify(onlineUserService).userOffline(target.getId());
+    }
+
+    @Test
+    void adminCannotTogglePendingRegistrationFromUserList() {
+        User admin = activeUser();
+        admin.setUserRole(UserConstant.ADMIN_ROLE);
+        User target = activeUser();
+        target.setId(2L);
+        target.setUserStatus(UserConstant.PENDING_REVIEW_STATUS);
+        when(userMapper.selectById(1L)).thenReturn(admin);
+        when(userMapper.selectById(2L)).thenReturn(target);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> userService.updateUserStatus(
+                        target.getId(),
+                        UserConstant.NORMAL_STATUS,
+                        loggedInRequest(admin.getId())
+                )
+        );
+
+        assertEquals(ErrorCode.PARAM_ERROR.getCode(), exception.getCode());
+        assertEquals("待审核注册请在注册审核中处理", exception.getDescription());
+        verify(userMapper, never()).updateById(any(User.class));
     }
 
     @Test
