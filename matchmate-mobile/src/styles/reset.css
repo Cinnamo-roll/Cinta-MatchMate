@@ -178,13 +178,55 @@ textarea {
 .van-dialog {
   width: min(88vw, 360px);
   overflow: hidden;
-  box-shadow: var(--app-shadow-md);
+  background:
+    radial-gradient(circle at 18% 0, rgb(238 240 255 / 95%) 0, transparent 34%),
+    linear-gradient(180deg, #fff 0%, #fbfcff 100%);
+  border: 1px solid rgb(255 255 255 / 78%);
+  box-shadow: 0 18px 44px rgb(37 45 76 / 16%);
 }
 
 .van-dialog__header {
-  padding-top: 22px;
+  padding: 24px 22px 6px;
   font-size: 18px;
   font-weight: 700;
+  letter-spacing: -.2px;
+}
+
+.van-dialog__message {
+  padding: 10px 24px 22px;
+  color: var(--app-text-secondary);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.van-dialog__footer {
+  gap: 10px;
+  padding: 0 16px 16px;
+}
+
+.van-dialog__footer::after {
+  display: none;
+}
+
+.van-dialog__footer .van-button {
+  height: 42px;
+  border-radius: var(--app-pill-radius);
+}
+
+.van-dialog__cancel {
+  color: var(--app-text-secondary);
+  background: var(--app-surface-muted);
+  border: 0;
+}
+
+.van-dialog__confirm {
+  border: 0;
+  box-shadow: 0 8px 18px rgb(89 104 233 / 18%);
+}
+
+.van-dialog__confirm:active,
+.van-dialog__cancel:active {
+  opacity: .86;
 }
 
 .van-empty {

@@ -3,6 +3,17 @@ import axios from 'axios';
 export const isUnauthorizedError = (error: unknown) =>
   axios.isAxiosError(error) && error.response?.status === 401;
 
+export const normalizeErrorMessage = (message: string, fallback = '操作失败') => {
+  const trimmed = message.trim();
+  if (!trimmed) return fallback;
+
+  const withoutFieldPrefixes = trimmed.replace(
+    /(^|[，,；;\n]\s*)[A-Za-z_][\w.[\]]*\s*[:：](?!\/\/)\s*/g,
+    '$1'
+  );
+  return withoutFieldPrefixes.trim() || fallback;
+};
+
 export const getRequestErrorMessage = (error: unknown, fallback: string) => {
   if (!axios.isAxiosError(error)) {
     return fallback;
@@ -14,7 +25,7 @@ export const getRequestErrorMessage = (error: unknown, fallback: string) => {
 
   const description = error.response?.data?.description;
   if (typeof description === 'string' && description.trim()) {
-    return description;
+    return normalizeErrorMessage(description, fallback);
   }
 
   if (error.response.status >= 500) {
@@ -22,5 +33,7 @@ export const getRequestErrorMessage = (error: unknown, fallback: string) => {
   }
 
   const message = error.response?.data?.message;
-  return typeof message === 'string' && message.trim() ? message : fallback;
+  return typeof message === 'string' && message.trim()
+    ? normalizeErrorMessage(message, fallback)
+    : fallback;
 };

@@ -45,4 +45,9 @@ export type WsPushPayload = {
   data: {
     message: string;
   };
+} | {
+  type: 'login_taken_over';
+  data: {
+    message: string;
+  };
 };

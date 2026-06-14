@@ -86,10 +86,10 @@ const syncWebSocket = async () => {
 };
 
 const handleWsMessage = (payload: WsPushPayload) => {
-  if (payload.type !== 'account_banned') return;
+  if (payload.type !== 'account_banned' && payload.type !== 'login_taken_over') return;
   forceDisconnect();
   void logout().catch(() => undefined);
-  showNotify(payload.data.message || '账号已被封禁，请联系管理员');
+  showNotify(payload.data.message || '当前登录状态已失效，请重新登录');
   router.replace('/login');
 };
 
@@ -167,7 +167,11 @@ onBeforeUnmount(() => {
     </van-tabbar>
 
     <Transition name="notify">
-      <div v-if="notifyMsg" class="bottom-notify" :class="notifyType">
+      <div
+        v-if="notifyMsg"
+        class="bottom-notify"
+        :class="[notifyType, { 'bottom-notify--with-tabbar': showTabbar }]"
+      >
         {{ notifyMsg }}
       </div>
     </Transition>
@@ -222,8 +226,9 @@ onBeforeUnmount(() => {
 
 .bottom-notify {
   position: fixed;
-  right: 16px;
-  bottom: calc(var(--app-tabbar-height) + var(--app-safe-bottom) + 14px);
+  top: auto;
+  right: auto;
+  bottom: calc(var(--app-safe-bottom) + 24px);
   left: 50%;
   width: max-content;
   max-width: min(calc(100vw - 32px), 420px);
@@ -242,6 +247,10 @@ onBeforeUnmount(() => {
   z-index: 9999;
 }
 
+.bottom-notify--with-tabbar {
+  bottom: calc(var(--app-tabbar-height) + var(--app-safe-bottom) + 14px);
+}
+
 .bottom-notify.error {
   background: rgb(214 67 91 / 92%);
 }
@@ -258,7 +267,7 @@ onBeforeUnmount(() => {
 .notify-enter-from,
 .notify-leave-to {
   opacity: 0;
-  transform: translateX(-50%) translateY(20px);
+  transform: translateX(-50%) translateY(16px);
 }
 
 .page-enter-active,
@@ -281,10 +290,6 @@ onBeforeUnmount(() => {
 @media (min-width: 600px) {
   .basic-layout {
     max-width: 480px;
-  }
-
-  .bottom-notify {
-    right: auto;
   }
 }
 </style>

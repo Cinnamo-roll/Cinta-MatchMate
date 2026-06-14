@@ -20,6 +20,7 @@ export type TagCategory = {
 export type LoginRequest = {
   userAccount: string;
   userPassword: string;
+  forceLogin?: boolean;
 };
 
 export type RegisterRequest = {

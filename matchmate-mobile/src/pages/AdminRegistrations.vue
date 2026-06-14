@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import axios from 'axios';
 import { onMounted, ref } from 'vue';
 import { showConfirmDialog } from 'vant';
 import { useRouter } from 'vue-router';
@@ -14,6 +13,7 @@ import {
 import { useNotify } from '../composables/useNotify';
 import type { RegistrationPolicy } from '../models/api';
 import type { User } from '../models/user';
+import { getRequestErrorMessage } from '../utils/http';
 import { isAdmin } from '../utils/user';
 
 const PAGE_SIZE = 20;
@@ -30,11 +30,6 @@ const finished = ref(false);
 const savingLimit = ref(false);
 const reviewingUserId = ref<number | null>(null);
 let pageNum = 1;
-
-const errorMessage = (error: unknown, fallback: string) =>
-  axios.isAxiosError(error)
-    ? error.response?.data?.description || fallback
-    : fallback;
 
 const syncPolicy = async () => {
   policy.value = await getRegistrationPolicy();
@@ -58,7 +53,7 @@ const loadPendingUsers = async (reset = false) => {
       pendingUsers.value.length >= page.total || page.records.length < PAGE_SIZE;
     pageNum += 1;
   } catch (error) {
-    showNotify(errorMessage(error, '待审核列表加载失败'));
+    showNotify(getRequestErrorMessage(error, '待审核列表加载失败'));
   } finally {
     loading.value = false;
     loadingMore.value = false;
@@ -78,7 +73,7 @@ const saveLimit = async () => {
     dailyLimitInput.value = String(policy.value.dailyLimit);
     showNotify('每日注册限额已更新', 'success');
   } catch (error) {
-    showNotify(errorMessage(error, '限额保存失败'));
+    showNotify(getRequestErrorMessage(error, '限额保存失败'));
   } finally {
     savingLimit.value = false;
   }
@@ -93,13 +88,26 @@ const removePendingUser = (userId: number) => {
 
 const approveUser = async (user: User) => {
   try {
+    await showConfirmDialog({
+      title: '同意注册申请',
+      message: `同意后「${user.username || user.userAccount}」就可以登录 MatchMate 了。`,
+      theme: 'round-button',
+      cancelButtonText: '再想想',
+      confirmButtonText: '同意通过',
+      confirmButtonColor: '#5968e9',
+    });
+  } catch {
+    return;
+  }
+
+  try {
     reviewingUserId.value = user.id;
     await approveRegistration(user.id);
     removePendingUser(user.id);
     await syncPolicy();
     showNotify('已同意注册申请', 'success');
   } catch (error) {
-    showNotify(errorMessage(error, '同意失败'));
+    showNotify(getRequestErrorMessage(error, '同意失败'));
   } finally {
     reviewingUserId.value = null;
   }
@@ -109,9 +117,11 @@ const rejectUser = async (user: User) => {
   try {
     await showConfirmDialog({
       title: '拒绝注册',
-      message: `确定拒绝「${user.username || user.userAccount}」这次注册申请吗？`,
-      confirmButtonText: '拒绝',
-      confirmButtonColor: '#ee0a24',
+      message: `拒绝后会移除「${user.username || user.userAccount}」这次注册申请，账号将无法登录。`,
+      theme: 'round-button',
+      cancelButtonText: '再想想',
+      confirmButtonText: '确认拒绝',
+      confirmButtonColor: '#ef5d72',
     });
   } catch {
     return;
@@ -124,7 +134,7 @@ const rejectUser = async (user: User) => {
     await syncPolicy();
     showNotify('已拒绝注册申请', 'success');
   } catch (error) {
-    showNotify(errorMessage(error, '拒绝失败'));
+    showNotify(getRequestErrorMessage(error, '拒绝失败'));
   } finally {
     reviewingUserId.value = null;
   }
@@ -148,7 +158,7 @@ onMounted(async () => {
     }
     await Promise.all([syncPolicy(), loadPendingUsers(true)]);
   } catch (error) {
-    showNotify(errorMessage(error, '请先登录管理员账号'));
+    showNotify(getRequestErrorMessage(error, '请先登录管理员账号'));
     router.replace('/login');
   }
 });

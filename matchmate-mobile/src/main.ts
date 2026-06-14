@@ -2,6 +2,7 @@ import {createApp} from 'vue'
 import App from './App.vue'
 import {createRouter, createWebHistory} from 'vue-router'
 import routes from "./config/route.ts";
+import 'vant/es/dialog/style'
 import './styles/theme.css'
 import './styles/reset.css'
 import './styles/auth.css'

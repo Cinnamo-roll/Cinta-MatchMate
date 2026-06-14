@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import axios from 'axios';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { showConfirmDialog } from 'vant';
 import { useRouter } from 'vue-router';
 import { getCurrentUser, searchAdminUsers, updateUserStatus } from '../api/matchmate';
 import { useNotify } from '../composables/useNotify';
 import type { User } from '../models/user';
+import { getRequestErrorMessage } from '../utils/http';
 import { isAdmin } from '../utils/user';
 
 const PAGE_SIZE = 20;
@@ -22,11 +22,6 @@ const updatingUserId = ref<number | null>(null);
 let pageNum = 1;
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 let requestId = 0;
-
-const errorMessage = (error: unknown, fallback: string) =>
-  axios.isAxiosError(error)
-    ? error.response?.data?.description || fallback
-    : fallback;
 
 const getStatusText = (status: number) => {
   if (status === 0) return '正常';
@@ -60,7 +55,7 @@ const loadUsers = async (reset = false) => {
     pageNum += 1;
   } catch (error) {
     if (currentRequestId === requestId) {
-      showNotify(errorMessage(error, '用户列表加载失败'));
+      showNotify(getRequestErrorMessage(error, '用户列表加载失败'));
     }
   } finally {
     if (currentRequestId === requestId) {
@@ -77,12 +72,18 @@ const toggleUserStatus = async (user: User) => {
   }
   const nextStatus = user.userStatus === 0 ? 1 : 0;
   const action = nextStatus === 1 ? '封停' : '解封';
+  const targetName = user.username || user.userAccount;
 
   try {
     await showConfirmDialog({
       title: `${action}账号`,
-      message: `确定要${action}“${user.username || user.userAccount}”吗？`,
-      confirmButtonColor: nextStatus === 1 ? '#ee0a24' : '#1989fa',
+      message: nextStatus === 1
+        ? `封停后「${targetName}」将不能继续登录和聊天。`
+        : `解封后「${targetName}」可以重新登录使用。`,
+      theme: 'round-button',
+      cancelButtonText: '再想想',
+      confirmButtonText: `确认${action}`,
+      confirmButtonColor: nextStatus === 1 ? '#ef5d72' : '#5968e9',
     });
   } catch {
     return;
@@ -94,7 +95,7 @@ const toggleUserStatus = async (user: User) => {
     user.userStatus = nextStatus;
     showNotify(`账号已${action}`, 'success');
   } catch (error) {
-    showNotify(errorMessage(error, `${action}失败`));
+    showNotify(getRequestErrorMessage(error, `${action}失败`));
   } finally {
     updatingUserId.value = null;
   }

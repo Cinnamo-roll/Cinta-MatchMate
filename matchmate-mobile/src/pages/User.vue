@@ -1,9 +1,9 @@
- <script setup lang="ts">
-import axios from 'axios';
+<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useNotify } from '../composables/useNotify';
 import { getGenderText, getRoleText, isAdmin, MAX_TAGS } from '../utils/user';
+import { getRequestErrorMessage, isUnauthorizedError } from '../utils/http';
 import { useTagSelection } from '../composables/useTagSelection';
 import {
   getCurrentUser,
@@ -62,8 +62,7 @@ const selectedTagCountText = computed(
   () => `${draftTags.value.length}/${MAX_TAGS}`,
 );
 
-const isUnauthorized = (error: unknown) =>
-  axios.isAxiosError(error) && error.response?.status === 401;
+const isUnauthorized = (error: unknown) => isUnauthorizedError(error);
 
 const loadCurrentUser = async () => {
   try {
@@ -138,10 +137,7 @@ const confirmUpdate = async () => {
     showEditor.value = false;
     showNotify('修改成功', 'success');
   } catch (error) {
-    const message = axios.isAxiosError(error)
-      ? error.response?.data?.description
-      : '';
-    showNotify(message || '修改失败');
+    showNotify(getRequestErrorMessage(error, '修改失败'));
   } finally {
     isSubmitting.value = false;
   }
@@ -219,10 +215,7 @@ const confirmUpdatePassword = async () => {
     showPasswordPopup.value = false;
     showNotify('密码修改成功', 'success');
   } catch (error) {
-    const message = axios.isAxiosError(error)
-      ? error.response?.data?.description
-      : '';
-    showNotify(message || '密码修改失败');
+    showNotify(getRequestErrorMessage(error, '密码修改失败'));
   } finally {
     isUpdatingPassword.value = false;
   }
@@ -305,10 +298,7 @@ const onAvatarFileSelected = async (event: Event) => {
     user.value = await uploadAvatar(file);
     showNotify('头像更新成功', 'success');
   } catch (error) {
-    const message = axios.isAxiosError(error)
-      ? error.response?.data?.description
-      : '';
-    showNotify(message || '头像上传失败');
+    showNotify(getRequestErrorMessage(error, '头像上传失败'));
   } finally {
     isUploadingAvatar.value = false;
     if (previewAvatarUrl.value) {
