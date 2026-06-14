@@ -1,4 +1,4 @@
-package com.cinoo.matchmateserver.chat.service;
+package com.cinoo.matchmateserver.chat.service.impl;
 
 import com.cinoo.matchmateserver.chat.service.OnlineUserService;
 import lombok.extern.slf4j.Slf4j;

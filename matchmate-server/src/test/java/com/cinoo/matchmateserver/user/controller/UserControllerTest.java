@@ -71,7 +71,7 @@ class UserControllerTest {
         UserVO userVO = new UserVO();
         userVO.setId(1L);
         userVO.setUserAccount("testuser");
-        when(userService.doLogin(eq("testuser"), eq("12345678"), any())).thenReturn(userVO);
+        when(userService.doLogin(eq("testuser"), eq("12345678"), eq(false), any())).thenReturn(userVO);
 
         mockMvc.perform(post("/user/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -84,6 +84,29 @@ class UserControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.userAccount").value("testuser"))
                 .andExpect(jsonPath("$.data.userPassword").doesNotExist());
+    }
+
+    @Test
+    void loginPassesForceLoginFlag() throws Exception {
+        UserVO userVO = new UserVO();
+        userVO.setId(1L);
+        userVO.setUserAccount("testuser");
+        when(userService.doLogin(eq("testuser"), eq("12345678"), eq(true), any()))
+                .thenReturn(userVO);
+
+        mockMvc.perform(post("/user/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "userAccount": "testuser",
+                                  "userPassword": "12345678",
+                                  "forceLogin": true
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.userAccount").value("testuser"));
+
+        verify(userService).doLogin(eq("testuser"), eq("12345678"), eq(true), any());
     }
 
     @Test

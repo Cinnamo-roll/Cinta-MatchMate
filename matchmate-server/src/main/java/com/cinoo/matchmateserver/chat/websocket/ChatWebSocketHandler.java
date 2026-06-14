@@ -68,22 +68,30 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     public void pushAccountBannedAndDisconnect(Long userId, String message) {
+        pushNoticeAndDisconnect(userId, "account_banned", new AccountBannedPayload(message));
+    }
+
+    public void pushLoginTakenOverAndDisconnect(Long userId, String message) {
+        pushNoticeAndDisconnect(userId, "login_taken_over", new LoginTakenOverPayload(message));
+    }
+
+    private void pushNoticeAndDisconnect(Long userId, String type, Object data) {
         WebSocketSession session = sessionManager.getSession(userId);
         if (session == null) {
             return;
         }
         try {
             String payload = objectMapper.writeValueAsString(
-                    new PushPayload("account_banned", new AccountBannedPayload(message))
+                    new PushPayload(type, data)
             );
             session.sendMessage(new TextMessage(payload));
         } catch (IOException e) {
-            log.warn("Failed to push banned notice to user {}", userId, e);
+            log.warn("Failed to push {} notice to user {}", type, userId, e);
         } finally {
             try {
                 session.close(CloseStatus.POLICY_VIOLATION);
             } catch (IOException e) {
-                log.warn("Failed to disconnect banned user {}", userId, e);
+                log.warn("Failed to disconnect user {}", userId, e);
             }
         }
     }
@@ -115,5 +123,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     private record AccountBannedPayload(String message) {
+    }
+
+    private record LoginTakenOverPayload(String message) {
     }
 }

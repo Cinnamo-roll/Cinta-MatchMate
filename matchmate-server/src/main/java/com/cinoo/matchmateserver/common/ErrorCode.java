@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 public enum ErrorCode {
     SUCCESS(0, HttpStatus.OK, "ok", ""),
     PARAM_ERROR(40000, HttpStatus.BAD_REQUEST, "Parameter error", ""),
+    LOGIN_CONFLICT(40900, HttpStatus.CONFLICT, "Login conflict", "该账号已在其他设备登录"),
     NOT_LOGIN(40100, HttpStatus.UNAUTHORIZED, "Not logged in", ""),
     NO_AUTH(40300, HttpStatus.FORBIDDEN, "No permission", ""),
     NOT_FOUND(40400, HttpStatus.NOT_FOUND, "Resource not found", ""),

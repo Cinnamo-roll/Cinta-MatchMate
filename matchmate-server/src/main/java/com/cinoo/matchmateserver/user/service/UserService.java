@@ -32,10 +32,16 @@ public interface UserService {
      *
      * @param userAccount 用户账号
      * @param userPassword 用户密码
+     * @param forceLogin 是否强制接管已登录设备
      * @param request HTTP请求对象
      * @return 脱敏后的用户信息
      */
-    UserVO doLogin(String userAccount, String userPassword, HttpServletRequest request);
+    UserVO doLogin(
+            String userAccount,
+            String userPassword,
+            boolean forceLogin,
+            HttpServletRequest request
+    );
 
     /**
      * 将用户实体转换为接口响应对象。

@@ -13,7 +13,7 @@ import com.cinoo.matchmateserver.user.model.request.UpdateUserProfileRequest;
 import com.cinoo.matchmateserver.user.model.vo.UserRecommendationVO;
 import com.cinoo.matchmateserver.user.model.vo.UserRegisterResultVO;
 import com.cinoo.matchmateserver.user.model.vo.UserVO;
-import com.cinoo.matchmateserver.user.service.UserServiceImpl;
+import com.cinoo.matchmateserver.user.service.impl.UserServiceImpl;
 import com.cinoo.matchmateserver.infrastructure.oss.OssUtils;
 import com.cinoo.matchmateserver.chat.service.OnlineUserService;
 import com.cinoo.matchmateserver.chat.websocket.ChatWebSocketHandler;
@@ -63,6 +63,7 @@ class UserServiceTest {
 
     private PasswordService passwordService;
     private UserService userService;
+    private LoginSessionRegistry loginSessionRegistry;
 
     @BeforeEach
     void setUp() {
@@ -75,6 +76,7 @@ class UserServiceTest {
         lenient().when(userMapper.selectAppSettingInt(anyString())).thenReturn(20);
         lenient().when(userMapper.countRegistrationsByStatusAndTimeRange(anyInt(), any(), any()))
                 .thenReturn(0L);
+        loginSessionRegistry = new LoginSessionRegistry();
         userService = new UserServiceImpl(
                 userMapper,
                 passwordService,
@@ -83,7 +85,8 @@ class UserServiceTest {
                 cacheInvalidationService,
                 ossUtils,
                 onlineUserService,
-                chatWebSocketHandler
+                chatWebSocketHandler,
+                loginSessionRegistry
         );
     }
 
@@ -166,7 +169,7 @@ class UserServiceTest {
         when(tagService.getUserTagNames(user.getId())).thenReturn(List.of("Java"));
         MockHttpServletRequest request = new MockHttpServletRequest();
 
-        UserVO result = userService.doLogin(ACCOUNT, PASSWORD, request);
+        UserVO result = userService.doLogin(ACCOUNT, PASSWORD, false, request);
 
         assertEquals(user.getId(), result.getId());
         assertEquals(user.getId(), request.getSession().getAttribute(UserConstant.USER_LOGIN_STATE));
@@ -179,7 +182,7 @@ class UserServiceTest {
         when(userMapper.selectOne(any())).thenReturn(user);
         MockHttpServletRequest request = new MockHttpServletRequest();
 
-        UserVO result = userService.doLogin("TestUser", PASSWORD, request);
+        UserVO result = userService.doLogin("TestUser", PASSWORD, false, request);
 
         assertEquals(user.getId(), result.getId());
         assertEquals(user.getId(), request.getSession().getAttribute(UserConstant.USER_LOGIN_STATE));
@@ -191,7 +194,7 @@ class UserServiceTest {
         user.setUserPassword(passwordService.encode(PASSWORD));
         when(userMapper.selectOne(any())).thenReturn(user);
 
-        UserVO result = userService.doLogin(ACCOUNT, PASSWORD, new MockHttpServletRequest());
+        UserVO result = userService.doLogin(ACCOUNT, PASSWORD, false, new MockHttpServletRequest());
 
         assertNotNull(result);
         assertFalse(List.of(result.getClass().getDeclaredFields()).stream()
@@ -207,7 +210,7 @@ class UserServiceTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> userService.doLogin(ACCOUNT, PASSWORD, new MockHttpServletRequest())
+                () -> userService.doLogin(ACCOUNT, PASSWORD, false, new MockHttpServletRequest())
         );
 
         assertEquals(ErrorCode.NO_AUTH.getCode(), exception.getCode());
@@ -223,11 +226,66 @@ class UserServiceTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> userService.doLogin(ACCOUNT, PASSWORD, new MockHttpServletRequest())
+                () -> userService.doLogin(ACCOUNT, PASSWORD, false, new MockHttpServletRequest())
         );
 
         assertEquals(ErrorCode.NO_AUTH.getCode(), exception.getCode());
         assertEquals("注册申请正在等待管理员审核", exception.getDescription());
+    }
+
+    @Test
+    void loginRejectsAnotherActiveSessionWithoutForce() {
+        User user = activeUser();
+        user.setUserPassword(passwordService.encode(PASSWORD));
+        when(userMapper.selectOne(any())).thenReturn(user);
+        when(tagService.getUserTagNames(user.getId())).thenReturn(List.of());
+
+        userService.doLogin(ACCOUNT, PASSWORD, false, new MockHttpServletRequest());
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> userService.doLogin(
+                        ACCOUNT,
+                        PASSWORD,
+                        false,
+                        new MockHttpServletRequest()
+                )
+        );
+
+        assertEquals(ErrorCode.LOGIN_CONFLICT.getCode(), exception.getCode());
+        assertEquals(
+                "该账号已在其他设备保持登录，是否继续登录并使原设备下线？",
+                exception.getDescription()
+        );
+    }
+
+    @Test
+    void forceLoginInvalidatesPreviousSessionAndNotifiesOldDevice() {
+        User user = activeUser();
+        user.setUserPassword(passwordService.encode(PASSWORD));
+        when(userMapper.selectOne(any())).thenReturn(user);
+        when(tagService.getUserTagNames(user.getId())).thenReturn(List.of());
+        MockHttpServletRequest firstRequest = new MockHttpServletRequest();
+        userService.doLogin(ACCOUNT, PASSWORD, false, firstRequest);
+        var firstSession = firstRequest.getSession(false);
+
+        MockHttpServletRequest takeoverRequest = new MockHttpServletRequest();
+        UserVO result = userService.doLogin(ACCOUNT, PASSWORD, true, takeoverRequest);
+
+        assertEquals(user.getId(), result.getId());
+        assertThrows(
+                IllegalStateException.class,
+                () -> firstSession.getAttribute(UserConstant.USER_LOGIN_STATE)
+        );
+        assertEquals(
+                user.getId(),
+                takeoverRequest.getSession(false).getAttribute(UserConstant.USER_LOGIN_STATE)
+        );
+        verify(chatWebSocketHandler).pushLoginTakenOverAndDisconnect(
+                eq(user.getId()),
+                contains("其他设备登录")
+        );
+        verify(onlineUserService).userOffline(user.getId());
     }
 
     @Test

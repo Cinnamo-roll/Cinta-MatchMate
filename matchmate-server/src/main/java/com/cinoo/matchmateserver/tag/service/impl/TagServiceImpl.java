@@ -1,4 +1,4 @@
-package com.cinoo.matchmateserver.tag.service;
+package com.cinoo.matchmateserver.tag.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.cinoo.matchmateserver.infrastructure.cache.CacheInvalidationService;

@@ -27,4 +27,7 @@ public class UserLoginRequest implements Serializable {
     @NotBlank(message = "用户密码不能为空")
     @Size(min = 8, max = 64, message = "用户密码长度必须为 8 到 64 位")
     private String userPassword;
+
+    @Schema(description = "是否强制接管已登录设备")
+    private Boolean forceLogin;
 }

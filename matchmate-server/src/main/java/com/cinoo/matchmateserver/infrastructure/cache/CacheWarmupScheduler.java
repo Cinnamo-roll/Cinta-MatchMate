@@ -1,7 +1,7 @@
 package com.cinoo.matchmateserver.infrastructure.cache;
 
 import com.cinoo.matchmateserver.config.CacheProperties;
-import com.cinoo.matchmateserver.tag.service.TagServiceImpl;
+import com.cinoo.matchmateserver.tag.service.impl.TagServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;

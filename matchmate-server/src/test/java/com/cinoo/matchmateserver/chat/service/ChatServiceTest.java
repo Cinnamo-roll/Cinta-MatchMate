@@ -10,7 +10,7 @@ import com.cinoo.matchmateserver.chat.model.entity.Message;
 import com.cinoo.matchmateserver.user.model.entity.User;
 import com.cinoo.matchmateserver.chat.model.vo.ConversationVO;
 import com.cinoo.matchmateserver.chat.model.vo.MessageVO;
-import com.cinoo.matchmateserver.chat.service.ChatServiceImpl;
+import com.cinoo.matchmateserver.chat.service.impl.ChatServiceImpl;
 import com.cinoo.matchmateserver.chat.websocket.ChatWebSocketHandler;
 import com.cinoo.matchmateserver.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;

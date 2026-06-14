@@ -59,6 +59,7 @@ public class UserController {
         UserVO user = userService.doLogin(
                 loginRequest.getUserAccount(),
                 loginRequest.getUserPassword(),
+                Boolean.TRUE.equals(loginRequest.getForceLogin()),
                 request
         );
         return ResultUtils.success(user);

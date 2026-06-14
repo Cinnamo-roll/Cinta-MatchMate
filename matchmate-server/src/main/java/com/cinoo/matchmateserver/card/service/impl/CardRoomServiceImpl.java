@@ -1,4 +1,4 @@
-package com.cinoo.matchmateserver.card.service;
+package com.cinoo.matchmateserver.card.service.impl;
 
 import com.cinoo.matchmateserver.common.ErrorCode;
 import com.cinoo.matchmateserver.card.constant.CardConstant;

@@ -1,4 +1,4 @@
-package com.cinoo.matchmateserver.chat.service;
+package com.cinoo.matchmateserver.chat.service.impl;
 
 import com.cinoo.matchmateserver.common.ErrorCode;
 import com.cinoo.matchmateserver.exception.BusinessException;

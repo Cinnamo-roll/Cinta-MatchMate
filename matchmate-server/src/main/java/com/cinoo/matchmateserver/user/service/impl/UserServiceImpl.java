@@ -1,4 +1,4 @@
-package com.cinoo.matchmateserver.user.service;
+package com.cinoo.matchmateserver.user.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -19,6 +19,7 @@ import com.cinoo.matchmateserver.user.model.vo.UserRegisterResultVO;
 import com.cinoo.matchmateserver.user.model.vo.UserVO;
 import com.cinoo.matchmateserver.user.service.PasswordService;
 import com.cinoo.matchmateserver.tag.service.TagService;
+import com.cinoo.matchmateserver.user.service.LoginSessionRegistry;
 import com.cinoo.matchmateserver.user.service.UserService;
 import com.cinoo.matchmateserver.chat.service.OnlineUserService;
 import com.cinoo.matchmateserver.infrastructure.oss.OssUtils;
@@ -68,6 +69,7 @@ public class UserServiceImpl implements UserService {
     private final OssUtils ossUtils;
     private final OnlineUserService onlineUserService;
     private final ChatWebSocketHandler chatWebSocketHandler;
+    private final LoginSessionRegistry loginSessionRegistry;
 
     public UserServiceImpl(
             UserMapper userMapper,
@@ -77,7 +79,8 @@ public class UserServiceImpl implements UserService {
             CacheInvalidationService cacheInvalidationService,
             OssUtils ossUtils,
             OnlineUserService onlineUserService,
-            ChatWebSocketHandler chatWebSocketHandler) {
+            ChatWebSocketHandler chatWebSocketHandler,
+            LoginSessionRegistry loginSessionRegistry) {
         this.userMapper = userMapper;
         this.passwordService = passwordService;
         this.tagService = tagService;
@@ -86,6 +89,7 @@ public class UserServiceImpl implements UserService {
         this.ossUtils = ossUtils;
         this.onlineUserService = onlineUserService;
         this.chatWebSocketHandler = chatWebSocketHandler;
+        this.loginSessionRegistry = loginSessionRegistry;
     }
 
     @Override
@@ -126,7 +130,11 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public UserVO doLogin(String userAccount, String userPassword, HttpServletRequest request) {
+    public UserVO doLogin(
+            String userAccount,
+            String userPassword,
+            boolean forceLogin,
+            HttpServletRequest request) {
         String normalizedAccount = normalizeAccount(userAccount);
         validateAccountAndPassword(normalizedAccount, userPassword);
 
@@ -142,7 +150,24 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ErrorCode.NO_AUTH, "账号已被封禁，请联系管理员");
         }
 
-        saveLoginState(request, user.getId());
+        String currentSessionId = currentSessionId(request);
+        if (loginSessionRegistry.hasOtherActiveSession(user.getId(), currentSessionId)) {
+            if (!forceLogin) {
+                throw new BusinessException(
+                        ErrorCode.LOGIN_CONFLICT,
+                        "该账号已在其他设备保持登录，是否继续登录并使原设备下线？"
+                );
+            }
+            loginSessionRegistry.invalidateOtherSession(user.getId(), currentSessionId);
+            chatWebSocketHandler.pushLoginTakenOverAndDisconnect(
+                    user.getId(),
+                    "你的账号已在其他设备登录，当前设备已安全下线"
+            );
+            onlineUserService.userOffline(user.getId());
+        }
+
+        HttpSession session = saveLoginState(request, user.getId());
+        loginSessionRegistry.register(user.getId(), session);
         return toUserVO(user);
     }
 
@@ -367,6 +392,7 @@ public class UserServiceImpl implements UserService {
     public void userLogout(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         if (session != null) {
+            loginSessionRegistry.remove(session);
             session.invalidate();
         }
     }
@@ -693,10 +719,16 @@ public class UserServiceImpl implements UserService {
     /**
      * 登录成功后更换 Session ID，降低 Session 固定攻击风险。
      */
-    private void saveLoginState(HttpServletRequest request, Long userId) {
+    private HttpSession saveLoginState(HttpServletRequest request, Long userId) {
         HttpSession session = request.getSession();
         request.changeSessionId();
         session.setAttribute(UserConstant.USER_LOGIN_STATE, userId);
+        return session;
+    }
+
+    private String currentSessionId(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        return session == null ? null : session.getId();
     }
 
     private Long getLoginUserId(HttpSession session) {

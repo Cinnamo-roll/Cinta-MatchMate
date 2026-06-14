@@ -7,7 +7,7 @@ import com.cinoo.matchmateserver.exception.BusinessException;
 import com.cinoo.matchmateserver.tag.mapper.TagMapper;
 import com.cinoo.matchmateserver.tag.mapper.UserTagMapper;
 import com.cinoo.matchmateserver.tag.model.entity.Tag;
-import com.cinoo.matchmateserver.tag.service.TagServiceImpl;
+import com.cinoo.matchmateserver.tag.service.impl.TagServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

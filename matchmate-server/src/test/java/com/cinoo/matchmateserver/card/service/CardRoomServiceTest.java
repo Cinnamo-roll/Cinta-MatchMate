@@ -12,7 +12,7 @@ import com.cinoo.matchmateserver.card.model.request.AddTransferRequest;
 import com.cinoo.matchmateserver.card.model.vo.CardRoomVO;
 import com.cinoo.matchmateserver.user.model.vo.UserVO;
 import com.cinoo.matchmateserver.card.service.assembler.CardRoomViewAssembler;
-import com.cinoo.matchmateserver.card.service.CardRoomServiceImpl;
+import com.cinoo.matchmateserver.card.service.impl.CardRoomServiceImpl;
 import com.cinoo.matchmateserver.card.service.support.CardRoomAccessGuard;
 import com.cinoo.matchmateserver.card.service.support.CardLedgerWriteProcessor;
 import com.cinoo.matchmateserver.card.service.support.CardRedisLockExecutor;
