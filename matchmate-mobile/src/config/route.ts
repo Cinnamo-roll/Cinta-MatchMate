@@ -47,6 +47,11 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '用户管理', showBack: true, hideTabbar: true },
   },
   {
+    path: '/admin/registrations',
+    component: () => import('../pages/AdminRegistrations.vue'),
+    meta: { title: '注册审核', showBack: true, hideTabbar: true },
+  },
+  {
     path: '/login',
     component: () => import('../pages/Login.vue'),
     meta: { title: '登录', lockScroll: true },

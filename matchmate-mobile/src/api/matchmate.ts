@@ -4,8 +4,11 @@ import type {
   BaseResponse,
   LoginRequest,
   PageResponse,
+  RegisterResult,
   RegisterRequest,
+  RegistrationPolicy,
   TagCategory,
+  UpdateRegistrationLimitRequest,
   UpdateUserProfileRequest,
   UpdatePasswordRequest,
 } from '../models/api';
@@ -84,7 +87,7 @@ export const login = async (request: LoginRequest) => {
 };
 
 export const register = async (request: RegisterRequest) =>
-  unwrap(await myAxios.post<BaseResponse<number>>('/user/register', request));
+  unwrap(await myAxios.post<BaseResponse<RegisterResult>>('/user/register', request));
 
 export const logout = async () => {
   try {
@@ -176,4 +179,35 @@ export const updateUserStatus = async (userId: number, userStatus: number) => {
   await myAxios.put<BaseResponse<null>>(`/user/${userId}/status`, {
     userStatus,
   });
+};
+
+export const getRegistrationPolicy = async () =>
+  unwrap(await myAxios.get<BaseResponse<RegistrationPolicy>>('/user/registration/policy'));
+
+export const updateRegistrationPolicy = async (
+  request: UpdateRegistrationLimitRequest,
+) =>
+  unwrap(
+    await myAxios.put<BaseResponse<RegistrationPolicy>>(
+      '/user/registration/policy',
+      request,
+    ),
+  );
+
+export const searchPendingRegistrations = async (
+  pageNum = 1,
+  pageSize = 20,
+) =>
+  unwrap(
+    await myAxios.get<BaseResponse<PageResponse<User>>>('/user/registration/pending', {
+      params: { pageNum, pageSize },
+    }),
+  );
+
+export const approveRegistration = async (userId: number) => {
+  await myAxios.put<BaseResponse<null>>(`/user/registration/${userId}/approve`);
+};
+
+export const rejectRegistration = async (userId: number) => {
+  await myAxios.put<BaseResponse<null>>(`/user/registration/${userId}/reject`);
 };

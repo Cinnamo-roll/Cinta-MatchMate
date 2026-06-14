@@ -402,6 +402,13 @@ const onAvatarFileSelected = async (event: Event) => {
           is-link
           @click="router.push('/admin/users')"
         />
+        <van-cell
+          title="注册审核"
+          label="设置每日注册限额，处理超限注册申请"
+          icon="records-o"
+          is-link
+          @click="router.push('/admin/registrations')"
+        />
       </van-cell-group>
 
       <section class="user-tags-section">

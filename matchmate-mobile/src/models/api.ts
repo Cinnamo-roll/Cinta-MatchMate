@@ -28,6 +28,22 @@ export type RegisterRequest = {
   checkPassword: string;
 };
 
+export type RegisterResult = {
+  userId: number;
+  pendingReview: boolean;
+  message: string;
+};
+
+export type RegistrationPolicy = {
+  dailyLimit: number;
+  approvedToday: number;
+  pendingCount: number;
+};
+
+export type UpdateRegistrationLimitRequest = {
+  dailyLimit: number;
+};
+
 export type UpdateUserProfileRequest = {
   username?: string;
   gender?: number;

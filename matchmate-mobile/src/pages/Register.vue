@@ -29,12 +29,12 @@ const submitRegister = async () => {
 
   try {
     registering.value = true;
-    await register({
+    const result = await register({
       userAccount: userAccount.trim(),
       userPassword,
       checkPassword,
     });
-    showNotify('注册成功', 'success');
+    showNotify(result.message || '注册成功', 'success');
     router.replace('/login');
   } catch (error) {
     showNotify(getRequestErrorMessage(error, '注册失败，请检查账号或密码'));

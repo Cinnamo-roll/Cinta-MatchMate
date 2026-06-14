@@ -28,6 +28,18 @@ const errorMessage = (error: unknown, fallback: string) =>
     ? error.response?.data?.description || fallback
     : fallback;
 
+const getStatusText = (status: number) => {
+  if (status === 0) return '正常';
+  if (status === 1) return '已封停';
+  if (status === 2) return '待审核';
+  return '异常';
+};
+
+const getStatusClass = (status: number) => ({
+  banned: status === 1,
+  pending: status === 2,
+});
+
 const loadUsers = async (reset = false) => {
   if (loading.value || loadingMore.value || (!reset && finished.value)) return;
   const currentRequestId = ++requestId;
@@ -59,6 +71,10 @@ const loadUsers = async (reset = false) => {
 };
 
 const toggleUserStatus = async (user: User) => {
+  if (user.userStatus === 2) {
+    router.push('/admin/registrations');
+    return;
+  }
   const nextStatus = user.userStatus === 0 ? 1 : 0;
   const action = nextStatus === 1 ? '封停' : '解封';
 
@@ -147,8 +163,8 @@ onBeforeUnmount(() => {
           <div class="user-heading">
             <strong>{{ user.username || user.userAccount }}</strong>
             <span v-if="isAdmin(user.userRole)" class="role-badge">管理员</span>
-            <span v-else :class="['status-badge', { banned: user.userStatus !== 0 }]">
-              {{ user.userStatus === 0 ? '正常' : '已封停' }}
+            <span v-else :class="['status-badge', getStatusClass(user.userStatus)]">
+              {{ getStatusText(user.userStatus) }}
             </span>
           </div>
           <span class="account">@{{ user.userAccount }}</span>
@@ -162,7 +178,7 @@ onBeforeUnmount(() => {
           :loading="updatingUserId === user.id"
           @click="toggleUserStatus(user)"
         >
-          {{ user.userStatus === 0 ? '封停' : '解封' }}
+          {{ user.userStatus === 2 ? '去审核' : user.userStatus === 0 ? '封停' : '解封' }}
         </van-button>
       </article>
 
@@ -294,6 +310,11 @@ onBeforeUnmount(() => {
 .status-badge.banned {
   color: var(--app-danger);
   background: #fff0f0;
+}
+
+.status-badge.pending {
+  color: #d98a00;
+  background: #fff7df;
 }
 
 .load-more {
