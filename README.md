@@ -105,7 +105,7 @@ MatchMate/
 
 ## 数据库
 
-数据库初始化脚本位于 `matchmate-server/src/main/resources/schema.sql`，包含建库、建表、标签基础数据和脱敏示例数据。导入方式：
+数据库初始化脚本位于 `matchmate-server/src/main/resources/schema.sql`，包含建库、建表、标签基础数据和脱敏示例数据（脱敏后用户密码均为 `MatchMate123`）。导入方式：
 
 ```bash
 mysql -u root -p < matchmate-server/src/main/resources/schema.sql

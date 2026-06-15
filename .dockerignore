@@ -1,0 +1,19 @@
+# Maven
+matchmate-server/target/
+matchmate-server/.m2/
+
+# Node
+matchmate-mobile/node_modules/
+matchmate-mobile/dist/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env

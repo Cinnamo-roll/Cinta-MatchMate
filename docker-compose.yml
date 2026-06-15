@@ -1,0 +1,94 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: matchmate-mysql
+    restart: always
+    command: --lower_case_table_names=1
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: matchmate
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./matchmate-server/src/main/resources/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - matchmate-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: matchmate-redis
+    restart: always
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - matchmate-net
+
+  server:
+    build:
+      context: ./matchmate-server
+      dockerfile: Dockerfile
+    container_name: matchmate-server
+    restart: always
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:mysql://mysql:3306/matchmate
+      DB_USERNAME: root
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      OSS_ENDPOINT: ${OSS_ENDPOINT}
+      OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID}
+      OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET}
+      OSS_BUCKET_NAME: ${OSS_BUCKET_NAME}
+      OSS_PUBLIC_BASE_URL: ${OSS_PUBLIC_BASE_URL}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      MATCHMATE_CORS_ALLOWED_ORIGINS: ${MATCHMATE_CORS_ALLOWED_ORIGINS:-http://localhost}
+      MANAGEMENT_ENDPOINTS: health
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - matchmate-net
+
+  nginx:
+    build:
+      context: ./matchmate-mobile
+      dockerfile: Dockerfile
+    container_name: matchmate-nginx
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - server
+    networks:
+      - matchmate-net
+
+volumes:
+  mysql-data:
+  redis-data:
+
+networks:
+  matchmate-net:
+    driver: bridge

@@ -1,6 +1,10 @@
 /*
 !/.gitignore
 !/README.md
+!/.env.example
+!/.dockerignore
+!/docker-compose.yml
+!/docs/
 !/matchmate-mobile/
 !/matchmate-server/
 
