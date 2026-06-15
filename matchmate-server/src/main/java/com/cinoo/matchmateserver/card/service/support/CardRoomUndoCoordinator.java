@@ -53,9 +53,7 @@ public class CardRoomUndoCoordinator {
                 participantIds,
                 userId);
 
-        CardRoomVO vo = cardRoomViewAssembler.toRoomVO(room, userId);
-        cardRoomEventPublisher.pushAfterCommit(roomId, userId, CardRoomEventType.ROUND_CREATED, vo);
-        return vo;
+        return publishRoomChanged(room, userId, CardRoomEventType.ROUND_CREATED);
     }
 
     public CardRoomVO requestFundUndo(Long roomId, Long fundId, Long userId) {
@@ -77,18 +75,14 @@ public class CardRoomUndoCoordinator {
                 participantIds,
                 userId);
 
-        CardRoomVO vo = cardRoomViewAssembler.toRoomVO(room, userId);
-        cardRoomEventPublisher.pushAfterCommit(roomId, userId, CardRoomEventType.FUND_CREATED, vo);
-        return vo;
+        return publishRoomChanged(room, userId, CardRoomEventType.FUND_CREATED);
     }
 
     public CardRoomVO approveUndo(Long roomId, Long undoRequestId, Long userId) {
         CardRoom room = requireUndoableRoom(roomId, userId);
         cardRoomUndoProcessor.approveUndo(room, undoRequestId, userId);
 
-        CardRoomVO vo = cardRoomViewAssembler.toRoomVO(room, userId);
-        cardRoomEventPublisher.pushAfterCommit(roomId, userId, CardRoomEventType.ROUND_CREATED, vo);
-        return vo;
+        return publishRoomChanged(room, userId, CardRoomEventType.ROUND_CREATED);
     }
 
     private CardRoom requireUndoableRoom(Long roomId, Long userId) {
@@ -96,5 +90,11 @@ public class CardRoomUndoCoordinator {
                 roomId,
                 userId,
                 "房间已结束，不能撤销历史记录");
+    }
+
+    private CardRoomVO publishRoomChanged(CardRoom room, Long userId, String eventType) {
+        CardRoomVO vo = cardRoomViewAssembler.toRoomVO(room, userId);
+        cardRoomEventPublisher.pushAfterCommit(room.getId(), userId, eventType, vo);
+        return vo;
     }
 }

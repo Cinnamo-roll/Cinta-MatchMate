@@ -12,7 +12,9 @@ import {
 import { getCurrentUser } from '../api/matchmate';
 import type { CardRoomHistory } from '../models/card';
 import type { User } from '../models/user';
+import { CARD_ROOM_STATUS, cardLedgerRoute } from '../utils/cardRoom';
 import { getRequestErrorMessage, isUnauthorizedError } from '../utils/http';
+import { formatMonthDay } from '../utils/time';
 
 const router = useRouter();
 const route = useRoute();
@@ -28,6 +30,8 @@ const showJoin = ref(false);
 const checking = ref(true);
 const ranking = ref<User[]>([]);
 const history = ref<CardRoomHistory[]>([]);
+const shouldSkipActiveRoom = () => route.query.skipActiveRoom === '1';
+const cardRoomPath = (roomId: number) => `/card-room/${roomId}`;
 
 const loadData = async () => {
   loadFailed.value = false;
@@ -36,10 +40,10 @@ const loadData = async () => {
   try {
     const user = await getCurrentUser(true);
     currentUser.value = user;
-    if (route.query.skipActiveRoom !== '1') {
+    if (!shouldSkipActiveRoom()) {
       const active = await getActiveRoom();
       if (active) {
-        router.replace(`/card-room/${active.roomId}`);
+        router.replace(cardRoomPath(active.roomId));
         return;
       }
     }
@@ -85,7 +89,7 @@ const handleCreate = async () => {
   loading.value = true;
   try {
     const room = await createRoom();
-    router.replace(`/card-room/${room.roomId}`);
+    router.replace(cardRoomPath(room.roomId));
   } catch (error) {
     if (isUnauthorizedError(error)) {
       currentUser.value = null;
@@ -121,7 +125,11 @@ const handleJoin = async () => {
     showJoin.value = false;
     joinCode.value = '';
     joinPassword.value = '';
-    router.replace(`/card-room/${room.roomId}`);
+    if (room.status === CARD_ROOM_STATUS.ENDED) {
+      router.replace(cardLedgerRoute());
+      return;
+    }
+    router.replace(cardRoomPath(room.roomId));
   } catch (error) {
     if (isUnauthorizedError(error)) {
       currentUser.value = null;
@@ -138,8 +146,6 @@ const handleJoin = async () => {
 };
 
 const displayName = (user: User) => user.username || user.userAccount;
-const formatDate = (value: string) =>
-  new Date(value).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
 </script>
 
 <template>
@@ -203,10 +209,10 @@ const formatDate = (value: string) =>
           </div>
           <div v-if="history.length" class="history-scroll">
             <button v-for="item in history" :key="item.roomId" type="button" class="history-item"
-              @click="router.push(`/card-room/${item.roomId}`)">
+              @click="router.push(cardRoomPath(item.roomId))">
               <span>
                 <strong>房间号：{{ item.roomCode }}</strong>
-                <small>{{ item.memberCount }} 人 · {{ formatDate(item.createTime) }}</small>
+                <small>{{ item.memberCount }} 人 · {{ formatMonthDay(item.createTime) }}</small>
               </span>
               <b :class="item.score > 0 ? 'positive' : item.score < 0 ? 'negative' : ''">
                 {{ item.score > 0 ? '+' : '' }}{{ item.score }} 元

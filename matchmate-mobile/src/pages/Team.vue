@@ -6,7 +6,9 @@ import { getConversations, openConversation } from '../api/chat';
 import { getCurrentUser } from '../api/matchmate';
 import { useWebSocket } from '../composables/useWebSocket';
 import type { ConversationVO, WsPushPayload } from '../models/chat';
+import { MESSAGE_STATUS, isMessageRead, messageReadText } from '../utils/chat';
 import { getRequestErrorMessage, isUnauthorizedError } from '../utils/http';
+import { formatConversationTime } from '../utils/time';
 
 const router = useRouter();
 const route = useRoute();
@@ -54,9 +56,6 @@ const loadConversations = async () => {
 const isLastMessageMine = (conv: ConversationVO) =>
   currentUserId.value !== null && conv.lastMessageSenderId === currentUserId.value;
 
-const lastMessageReadText = (conv: ConversationVO) =>
-  conv.lastMessageStatus === 1 ? '已读' : '未读';
-
 const goToLogin = () => {
   router.push({
     path: '/login',
@@ -94,7 +93,7 @@ const handleMessagesRead = (payload: WsPushPayload) => {
   if (idx === -1) return;
   const conv = conversations.value[idx];
   if (conv.lastMessageSenderId === currentUserId.value) {
-    conv.lastMessageStatus = 1;
+    conv.lastMessageStatus = MESSAGE_STATUS.READ;
   }
 };
 
@@ -120,24 +119,6 @@ const enterConversation = async (conv: ConversationVO) => {
       isOnline: String(Boolean(conv.isOnline)),
     },
   });
-};
-
-const formatTime = (timeStr: string | null) => {
-  if (!timeStr) return '';
-  const date = new Date(timeStr);
-  const now = new Date();
-  if (date.toDateString() === now.toDateString()) {
-    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-  }
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) {
-    return '昨天';
-  }
-  if (date.getFullYear() === now.getFullYear()) {
-    return `${date.getMonth() + 1}/${date.getDate()}`;
-  }
-  return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
 };
 
 let unsubMessage: (() => void) | null = null;
@@ -226,16 +207,16 @@ onUnmounted(() => {
           <div class="conv-info">
             <div class="conv-top">
               <span class="conv-name">{{ conv.targetUsername ?? '未知用户' }}</span>
-              <span class="conv-time">{{ formatTime(conv.lastMessageTime) }}</span>
+              <span class="conv-time">{{ formatConversationTime(conv.lastMessageTime) }}</span>
             </div>
             <div class="conv-bottom">
               <span class="conv-last-msg">{{ conv.lastMessage ?? '' }}</span>
               <span
                 v-if="isLastMessageMine(conv)"
                 class="message-status"
-                :class="{ read: conv.lastMessageStatus === 1 }"
+                :class="{ read: isMessageRead(conv.lastMessageStatus) }"
               >
-                {{ lastMessageReadText(conv) }}
+                {{ messageReadText(conv.lastMessageStatus) }}
               </span>
               <van-badge v-else-if="conv.unreadCount > 0" :content="conv.unreadCount" max="99" />
             </div>

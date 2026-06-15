@@ -14,6 +14,8 @@ import { getCurrentUser } from '../api/matchmate';
 import { useWebSocket } from '../composables/useWebSocket';
 import type { MessageVO, WsPushPayload } from '../models/chat';
 import type { User } from '../models/user';
+import { MESSAGE_STATUS, MESSAGE_TYPE, isMessageRead, messageReadText } from '../utils/chat';
+import { formatClockTime } from '../utils/time';
 
 const route = useRoute();
 const router = useRouter();
@@ -117,7 +119,7 @@ const handleSend = async () => {
   const optimisticMsg: MessageVO = {
     id: tempId, conversationId: conversationId,
     senderId: currentUser.value.id, receiverId: targetUserId.value,
-    content, messageType: 0, status: 0,
+    content, messageType: MESSAGE_TYPE.TEXT, status: MESSAGE_STATUS.UNREAD,
     createTime: new Date().toISOString(),
   };
   messages.value.push(optimisticMsg);
@@ -154,8 +156,8 @@ const handleWsMessage = (payload: WsPushPayload) => {
   if (payload.type === 'messages_read') {
     if (payload.data.conversationId !== conversationId) return;
     messages.value.forEach((message) => {
-      if (isSelf(message) && message.status === 0) {
-        message.status = 1;
+      if (isSelf(message) && !isMessageRead(message.status)) {
+        message.status = MESSAGE_STATUS.READ;
       }
     });
     return;
@@ -170,11 +172,6 @@ const handleWsMessage = (payload: WsPushPayload) => {
 };
 
 const isSelf = (msg: MessageVO) => msg.senderId === currentUser.value?.id;
-
-const formatTime = (timeStr: string) => {
-  const date = new Date(timeStr);
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-};
 
 const goBack = () => {
   if (window.history.length > 1) {
@@ -273,9 +270,9 @@ onUnmounted(() => {
               <span class="msg-text">{{ msg.content }}</span>
             </div>
             <div class="msg-meta">
-              <span>{{ formatTime(msg.createTime) }}</span>
-              <span v-if="isSelf(msg)" :class="{ read: msg.status === 1 }">
-                {{ msg.status === 1 ? '已读' : '未读' }}
+              <span>{{ formatClockTime(msg.createTime) }}</span>
+              <span v-if="isSelf(msg)" :class="{ read: isMessageRead(msg.status) }">
+                {{ messageReadText(msg.status) }}
               </span>
             </div>
           </div>

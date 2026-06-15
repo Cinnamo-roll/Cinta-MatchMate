@@ -83,8 +83,7 @@ public class CardLedgerWriteProcessor {
             totalOut = Math.addExact(totalOut, amount);
         }
 
-        List<Long> activeMemberIds = cardRoomMapper.selectActiveMemberIds(roomId);
-        if (!new HashSet<>(activeMemberIds).containsAll(seenUserIds)) {
+        if (!activeMemberIdSet(roomId).containsAll(seenUserIds)) {
             throw new BusinessException(ErrorCode.ROUND_MEMBER_MISSING, "收款人必须是在房成员");
         }
 
@@ -108,11 +107,14 @@ public class CardLedgerWriteProcessor {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "平摊成员不能重复");
         }
 
-        List<Long> activeMemberIds = cardRoomMapper.selectActiveMemberIds(roomId);
-        if (!new HashSet<>(activeMemberIds).containsAll(participantSet)) {
+        if (!activeMemberIdSet(roomId).containsAll(participantSet)) {
             throw new BusinessException(ErrorCode.ROUND_MEMBER_MISSING, "平摊成员包含非房间成员");
         }
         return new ArrayList<>(participantSet);
+    }
+
+    private Set<Long> activeMemberIdSet(Long roomId) {
+        return new HashSet<>(cardRoomMapper.selectActiveMemberIds(roomId));
     }
 
     private void insertRound(Long roomId, Long creatorId, Map<Long, Integer> scoresByUserId) {

@@ -14,6 +14,7 @@ import { useNotify } from '../composables/useNotify';
 import type { RegistrationPolicy } from '../models/api';
 import type { User } from '../models/user';
 import { getRequestErrorMessage } from '../utils/http';
+import { formatMonthDayTime } from '../utils/time';
 import { isAdmin } from '../utils/user';
 
 const PAGE_SIZE = 20;
@@ -140,14 +141,6 @@ const rejectUser = async (user: User) => {
   }
 };
 
-const formatTime = (time: string) =>
-  new Date(time).toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
 onMounted(async () => {
   try {
     const currentUser = await getCurrentUser();
@@ -232,7 +225,7 @@ onMounted(async () => {
           <div class="pending-info">
             <strong>{{ user.username || user.userAccount }}</strong>
             <span>@{{ user.userAccount }}</span>
-            <small>申请时间 {{ formatTime(user.createTime) }}</small>
+            <small>申请时间 {{ formatMonthDayTime(user.createTime) }}</small>
           </div>
 
           <div class="pending-actions">

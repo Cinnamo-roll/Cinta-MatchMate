@@ -13,7 +13,6 @@ import com.cinoo.matchmateserver.card.model.entity.CardRoom;
 import com.cinoo.matchmateserver.card.model.entity.CardRoomMember;
 import com.cinoo.matchmateserver.user.model.entity.User;
 import com.cinoo.matchmateserver.card.model.vo.CardRoomVO;
-import com.cinoo.matchmateserver.user.model.vo.UserVO;
 import com.cinoo.matchmateserver.retention.DataRetentionService;
 import com.cinoo.matchmateserver.user.service.UserService;
 import com.cinoo.matchmateserver.card.service.assembler.CardRoomViewAssembler;
@@ -70,9 +69,7 @@ public class CardRoomLifecycleProcessor {
                 new LambdaQueryWrapper<CardRoom>()
                         .eq(CardRoom::getRoomCode, roomCode));
         if (initialRoom == null) throw new BusinessException(ErrorCode.ROOM_NOT_FOUND);
-        if (initialRoom.getStatus() != CardConstant.ROOM_STATUS_ACTIVE) {
-            throw new BusinessException(ErrorCode.ROOM_ALREADY_ENDED);
-        }
+        ensureActiveRoom(initialRoom);
         if (!Objects.equals(initialRoom.getRoomPassword(), roomPassword)) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "房间密码错误");
         }
@@ -84,41 +81,22 @@ public class CardRoomLifecycleProcessor {
     }
 
     public void leaveRoom(Long roomId, User user) {
-        CardRoom room = cardRoomAccessGuard.requireRoom(roomId);
-        if (room.getStatus() != CardConstant.ROOM_STATUS_ACTIVE) {
-            throw new BusinessException(ErrorCode.ROOM_ALREADY_ENDED);
-        }
+        CardRoom room = requireActiveRoom(roomId);
         if (room.getOwnerId().equals(user.getId())) {
             throw new BusinessException(ErrorCode.ROOM_NOT_OWNER, "房主不能直接退出房间，请先结束房间");
         }
 
         CardRoomMember member = cardRoomAccessGuard.requireActiveMember(roomId, user.getId());
-        member.setStatus(CardConstant.MEMBER_STATUS_LEFT);
-        member.setSettleScore(member.getTotalScore());
-        int deltaWins = member.getTotalScore() > 0 ? 1 : 0;
-        int deltaLosses = member.getTotalScore() < 0 ? 1 : 0;
-        member.setWins(member.getWins() + deltaWins);
-        member.setLosses(member.getLosses() + deltaLosses);
-        member.setLeaveTime(new Date());
-        cardRoomMemberMapper.updateById(member);
-
-        userMapper.addStats(user.getId(), member.getTotalScore(), deltaWins, deltaLosses);
+        settleLeavingMember(member, CardConstant.MEMBER_STATUS_LEFT);
         cacheInvalidationService.userChanged(user.getId());
 
-        UserVO userVO = userService.toUserVO(user);
-        cardRoomEventPublisher.pushAfterCommit(
-                roomId,
-                user.getId(),
-                CardRoomEventType.MEMBER_LEFT,
-                userVO);
+        publishMemberEvent(roomId, user.getId(), CardRoomEventType.MEMBER_LEFT, user);
     }
 
     public CardRoomVO kickMember(Long roomId, Long targetUserId, User owner) {
         CardRoom room = cardRoomAccessGuard.requireRoom(roomId);
         cardRoomAccessGuard.requireOwner(room, owner.getId());
-        if (room.getStatus() != CardConstant.ROOM_STATUS_ACTIVE) {
-            throw new BusinessException(ErrorCode.ROOM_ALREADY_ENDED);
-        }
+        ensureActiveRoom(room);
         if (owner.getId().equals(targetUserId)) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "房主不能踢出自己");
         }
@@ -129,12 +107,7 @@ public class CardRoomLifecycleProcessor {
         User targetUser = userMapper.selectById(targetUserId);
         if (targetUser != null) {
             cacheInvalidationService.userChanged(targetUserId);
-            UserVO userVO = userService.toUserVO(targetUser);
-            cardRoomEventPublisher.pushAfterCommit(
-                    roomId,
-                    owner.getId(),
-                    CardRoomEventType.MEMBER_LEFT,
-                    userVO);
+            publishMemberEvent(roomId, owner.getId(), CardRoomEventType.MEMBER_LEFT, targetUser);
         }
         return cardRoomViewAssembler.toRoomVO(room, owner.getId());
     }
@@ -142,9 +115,7 @@ public class CardRoomLifecycleProcessor {
     public CardRoomVO approveMember(Long roomId, Long targetUserId, User owner) {
         CardRoom room = cardRoomAccessGuard.requireRoom(roomId);
         cardRoomAccessGuard.requireOwner(room, owner.getId());
-        if (room.getStatus() != CardConstant.ROOM_STATUS_ACTIVE) {
-            throw new BusinessException(ErrorCode.ROOM_ALREADY_ENDED);
-        }
+        ensureActiveRoom(room);
         if (owner.getId().equals(targetUserId)) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "房主无需同意自己加入");
         }
@@ -155,20 +126,12 @@ public class CardRoomLifecycleProcessor {
         }
         assertRoomHasCapacity(room);
 
-        member.setStatus(CardConstant.MEMBER_STATUS_ACTIVE);
-        member.setJoinTime(new Date());
-        member.setLeaveTime(null);
-        cardRoomMemberMapper.updateById(member);
+        activateMember(member);
 
         User targetUser = userMapper.selectById(targetUserId);
         if (targetUser != null) {
             cacheInvalidationService.userChanged(targetUserId);
-            UserVO userVO = userService.toUserVO(targetUser);
-            cardRoomEventPublisher.pushAfterCommit(
-                    roomId,
-                    owner.getId(),
-                    CardRoomEventType.MEMBER_JOINED,
-                    userVO);
+            publishMemberEvent(roomId, owner.getId(), CardRoomEventType.MEMBER_JOINED, targetUser);
         }
         return cardRoomViewAssembler.toRoomVO(room, owner.getId());
     }
@@ -176,9 +139,7 @@ public class CardRoomLifecycleProcessor {
     public CardRoomVO endRoom(Long roomId, User user) {
         CardRoom room = cardRoomAccessGuard.requireRoom(roomId);
         cardRoomAccessGuard.requireOwner(room, user.getId());
-        if (room.getStatus() != CardConstant.ROOM_STATUS_ACTIVE) {
-            throw new BusinessException(ErrorCode.ROOM_ALREADY_ENDED);
-        }
+        ensureActiveRoom(room);
 
         return cardRedisLockExecutor.call(
                 CardConstant.LOCK_END + roomId,
@@ -189,10 +150,7 @@ public class CardRoomLifecycleProcessor {
     }
 
     private CardRoomVO joinRoomLocked(Long roomId, User user) {
-        CardRoom room = cardRoomAccessGuard.requireRoom(roomId);
-        if (room.getStatus() != CardConstant.ROOM_STATUS_ACTIVE) {
-            throw new BusinessException(ErrorCode.ROOM_ALREADY_ENDED);
-        }
+        CardRoom room = requireActiveRoom(roomId);
 
         CardRoom existing = cardRoomMapper.selectActiveRoomByUserId(user.getId());
         if (existing != null && !existing.getId().equals(room.getId())) {
@@ -227,16 +185,12 @@ public class CardRoomLifecycleProcessor {
             if (updated != 1) {
                 throw new BusinessException(ErrorCode.SYSTEM_ERROR, "重新加入房间失败");
             }
-            member.setStatus(CardConstant.MEMBER_STATUS_ACTIVE);
-            member.setJoinTime(new Date());
-            member.setLeaveTime(null);
+            resetMemberEntryTime(member, CardConstant.MEMBER_STATUS_ACTIVE);
             return publishJoinedAndBuildVO(room, user);
         }
         if (member.getStatus() == CardConstant.MEMBER_STATUS_KICKED) {
             assertRoomHasCapacity(room);
-            member.setStatus(CardConstant.MEMBER_STATUS_REJOIN_REQUEST);
-            member.setJoinTime(new Date());
-            member.setLeaveTime(null);
+            resetMemberEntryTime(member, CardConstant.MEMBER_STATUS_REJOIN_REQUEST);
             cardRoomMemberMapper.updateById(member);
             return publishJoinedAndBuildVO(room, user);
         }
@@ -247,28 +201,20 @@ public class CardRoomLifecycleProcessor {
     }
 
     private CardRoomVO endRoomLocked(Long roomId, User user) {
-        CardRoom room = cardRoomAccessGuard.requireRoom(roomId);
-        if (room.getStatus() != CardConstant.ROOM_STATUS_ACTIVE) {
-            throw new BusinessException(ErrorCode.ROOM_ALREADY_ENDED);
-        }
+        CardRoom room = requireActiveRoom(roomId);
 
         List<CardRoomMember> activeMembers = cardRoomMemberMapper.selectActiveByRoomId(roomId);
         List<CardRoomMember> toSettle = new ArrayList<>();
 
         for (CardRoomMember member : activeMembers) {
-            int finalScore = member.getTotalScore();
-            member.setSettleScore(finalScore);
-            member.setStatus(CardConstant.MEMBER_STATUS_SETTLED);
-            member.setLeaveTime(new Date());
-
-            if (finalScore > 0) member.setWins(member.getWins() + 1);
-            else if (finalScore < 0) member.setLosses(member.getLosses() + 1);
-
+            ScoreSettlement settlement = settleMemberScore(member, CardConstant.MEMBER_STATUS_SETTLED);
             toSettle.add(member);
 
-            int deltaWins = finalScore > 0 ? 1 : 0;
-            int deltaLosses = finalScore < 0 ? 1 : 0;
-            userMapper.addStats(member.getUserId(), finalScore, deltaWins, deltaLosses);
+            userMapper.addStats(
+                    member.getUserId(),
+                    settlement.finalScore(),
+                    settlement.deltaWins(),
+                    settlement.deltaLosses());
             cacheInvalidationService.userChanged(member.getUserId());
         }
 
@@ -290,14 +236,40 @@ public class CardRoomLifecycleProcessor {
         return vo;
     }
 
+    private void publishMemberEvent(Long roomId, Long operatorId, String eventType, User memberUser) {
+        cardRoomEventPublisher.pushAfterCommit(
+                roomId,
+                operatorId,
+                eventType,
+                userService.toUserVO(memberUser));
+    }
+
+    private CardRoom requireActiveRoom(Long roomId) {
+        CardRoom room = cardRoomAccessGuard.requireRoom(roomId);
+        ensureActiveRoom(room);
+        return room;
+    }
+
+    private void ensureActiveRoom(CardRoom room) {
+        if (room.getStatus() != CardConstant.ROOM_STATUS_ACTIVE) {
+            throw new BusinessException(ErrorCode.ROOM_ALREADY_ENDED);
+        }
+    }
+
+    private void activateMember(CardRoomMember member) {
+        resetMemberEntryTime(member, CardConstant.MEMBER_STATUS_ACTIVE);
+        cardRoomMemberMapper.updateById(member);
+    }
+
+    private void resetMemberEntryTime(CardRoomMember member, int status) {
+        member.setStatus(status);
+        member.setJoinTime(new Date());
+        member.setLeaveTime(null);
+    }
+
     private CardRoomVO publishJoinedAndBuildVO(CardRoom room, User user) {
         CardRoomVO vo = cardRoomViewAssembler.toRoomVO(room, user.getId());
-        UserVO userVO = userService.toUserVO(user);
-        cardRoomEventPublisher.pushAfterCommit(
-                room.getId(),
-                user.getId(),
-                CardRoomEventType.MEMBER_JOINED,
-                userVO);
+        publishMemberEvent(room.getId(), user.getId(), CardRoomEventType.MEMBER_JOINED, user);
         return vo;
     }
 
@@ -330,6 +302,16 @@ public class CardRoomLifecycleProcessor {
     }
 
     private void settleLeavingMember(CardRoomMember member, int targetStatus) {
+        ScoreSettlement settlement = settleMemberScore(member, targetStatus);
+        cardRoomMemberMapper.updateById(member);
+        userMapper.addStats(
+                member.getUserId(),
+                settlement.finalScore(),
+                settlement.deltaWins(),
+                settlement.deltaLosses());
+    }
+
+    private ScoreSettlement settleMemberScore(CardRoomMember member, int targetStatus) {
         int finalScore = member.getTotalScore();
         int deltaWins = finalScore > 0 ? 1 : 0;
         int deltaLosses = finalScore < 0 ? 1 : 0;
@@ -338,8 +320,7 @@ public class CardRoomLifecycleProcessor {
         member.setWins(member.getWins() + deltaWins);
         member.setLosses(member.getLosses() + deltaLosses);
         member.setLeaveTime(new Date());
-        cardRoomMemberMapper.updateById(member);
-        userMapper.addStats(member.getUserId(), finalScore, deltaWins, deltaLosses);
+        return new ScoreSettlement(finalScore, deltaWins, deltaLosses);
     }
 
     private void checkNotInActiveRoom(Long userId) {
@@ -355,5 +336,8 @@ public class CardRoomLifecycleProcessor {
         } catch (RuntimeException e) {
             log.error("Card history retention cleanup failed", e);
         }
+    }
+
+    private record ScoreSettlement(int finalScore, int deltaWins, int deltaLosses) {
     }
 }

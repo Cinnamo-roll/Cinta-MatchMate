@@ -6,7 +6,14 @@ import { getCurrentUser, searchAdminUsers, updateUserStatus } from '../api/match
 import { useNotify } from '../composables/useNotify';
 import type { User } from '../models/user';
 import { getRequestErrorMessage } from '../utils/http';
-import { isAdmin } from '../utils/user';
+import {
+  USER_STATUS,
+  getUserStatusText,
+  isAdmin,
+  isBannedUserStatus,
+  isNormalUserStatus,
+  isPendingUserStatus,
+} from '../utils/user';
 
 const PAGE_SIZE = 20;
 
@@ -23,17 +30,15 @@ let pageNum = 1;
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 let requestId = 0;
 
-const getStatusText = (status: number) => {
-  if (status === 0) return '正常';
-  if (status === 1) return '已封停';
-  if (status === 2) return '待审核';
-  return '异常';
-};
-
 const getStatusClass = (status: number) => ({
-  banned: status === 1,
-  pending: status === 2,
+  banned: isBannedUserStatus(status),
+  pending: isPendingUserStatus(status),
 });
+
+const statusActionText = (status: number) => {
+  if (isPendingUserStatus(status)) return '去审核';
+  return isNormalUserStatus(status) ? '封停' : '解封';
+};
 
 const loadUsers = async (reset = false) => {
   if (loading.value || loadingMore.value || (!reset && finished.value)) return;
@@ -66,24 +71,26 @@ const loadUsers = async (reset = false) => {
 };
 
 const toggleUserStatus = async (user: User) => {
-  if (user.userStatus === 2) {
+  if (isPendingUserStatus(user.userStatus)) {
     router.push('/admin/registrations');
     return;
   }
-  const nextStatus = user.userStatus === 0 ? 1 : 0;
-  const action = nextStatus === 1 ? '封停' : '解封';
+  const nextStatus = isNormalUserStatus(user.userStatus)
+    ? USER_STATUS.BANNED
+    : USER_STATUS.NORMAL;
+  const action = nextStatus === USER_STATUS.BANNED ? '封停' : '解封';
   const targetName = user.username || user.userAccount;
 
   try {
     await showConfirmDialog({
       title: `${action}账号`,
-      message: nextStatus === 1
+      message: nextStatus === USER_STATUS.BANNED
         ? `封停后「${targetName}」将不能继续登录和聊天。`
         : `解封后「${targetName}」可以重新登录使用。`,
       theme: 'round-button',
       cancelButtonText: '再想想',
       confirmButtonText: `确认${action}`,
-      confirmButtonColor: nextStatus === 1 ? '#ef5d72' : '#5968e9',
+      confirmButtonColor: nextStatus === USER_STATUS.BANNED ? '#ef5d72' : '#5968e9',
     });
   } catch {
     return;
@@ -165,7 +172,7 @@ onBeforeUnmount(() => {
             <strong>{{ user.username || user.userAccount }}</strong>
             <span v-if="isAdmin(user.userRole)" class="role-badge">管理员</span>
             <span v-else :class="['status-badge', getStatusClass(user.userStatus)]">
-              {{ getStatusText(user.userStatus) }}
+              {{ getUserStatusText(user.userStatus) }}
             </span>
           </div>
           <span class="account">@{{ user.userAccount }}</span>
@@ -174,12 +181,12 @@ onBeforeUnmount(() => {
         <van-button
           v-if="!isAdmin(user.userRole)"
           size="small"
-          :type="user.userStatus === 0 ? 'danger' : 'primary'"
-          :plain="user.userStatus === 0"
+          :type="isNormalUserStatus(user.userStatus) ? 'danger' : 'primary'"
+          :plain="isNormalUserStatus(user.userStatus)"
           :loading="updatingUserId === user.id"
           @click="toggleUserStatus(user)"
         >
-          {{ user.userStatus === 2 ? '去审核' : user.userStatus === 0 ? '封停' : '解封' }}
+          {{ statusActionText(user.userStatus) }}
         </van-button>
       </article>
 

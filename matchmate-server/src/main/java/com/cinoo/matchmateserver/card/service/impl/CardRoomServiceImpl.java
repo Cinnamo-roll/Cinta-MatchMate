@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.function.Function;
 
 @Service
 @RequiredArgsConstructor
@@ -119,14 +120,11 @@ public class CardRoomServiceImpl implements CardRoomService {
         User user = loginUser(httpRequest);
         CardRoom room = cardRoomAccessGuard.requireActiveRoomForMember(roomId, user.getId());
         cardLedgerWriteProcessor.addTransfer(roomId, user, request);
-
-        CardRoomVO vo = cardRoomViewAssembler.toRoomVO(room, user.getId());
-        cardRoomEventPublisher.pushAfterCommit(
-                roomId,
+        return publishUpdatedRoom(
+                room,
                 user.getId(),
                 CardRoomEventType.ROUND_CREATED,
-                vo.getRecentRounds().get(0));
-        return vo;
+                vo -> vo.getRecentRounds().get(0));
     }
 
     @Override
@@ -135,14 +133,11 @@ public class CardRoomServiceImpl implements CardRoomService {
         User user = loginUser(httpRequest);
         CardRoom room = cardRoomAccessGuard.requireActiveRoomForMember(roomId, user.getId());
         cardLedgerWriteProcessor.addFund(roomId, user, request);
-
-        CardRoomVO vo = cardRoomViewAssembler.toRoomVO(room, user.getId());
-        cardRoomEventPublisher.pushAfterCommit(
-                roomId,
+        return publishUpdatedRoom(
+                room,
                 user.getId(),
                 CardRoomEventType.FUND_CREATED,
-                vo.getRecentFunds().get(0));
-        return vo;
+                vo -> vo.getRecentFunds().get(0));
     }
 
     @Override
@@ -181,5 +176,19 @@ public class CardRoomServiceImpl implements CardRoomService {
         if (limit <= 0 || limit > MAX_OVERVIEW_LIMIT) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "查询数量必须在 1 到 20 之间");
         }
+    }
+
+    private CardRoomVO publishUpdatedRoom(
+            CardRoom room,
+            Long operatorId,
+            String eventType,
+            Function<CardRoomVO, Object> eventDataSelector) {
+        CardRoomVO vo = cardRoomViewAssembler.toRoomVO(room, operatorId);
+        cardRoomEventPublisher.pushAfterCommit(
+                room.getId(),
+                operatorId,
+                eventType,
+                eventDataSelector.apply(vo));
+        return vo;
     }
 }

@@ -20,7 +20,18 @@ import { getCurrentUser } from '../api/matchmate';
 import { CardWsEvent } from '../models/card';
 import type { CardFundRecordVO, CardRoomMemberVO, CardRoomVO, CardWsPayload } from '../models/card';
 import type { User } from '../models/user';
+import {
+  CARD_MEMBER_STATUS,
+  CARD_ROOM_STATUS,
+  POSITIVE_INTEGER_PATTERN,
+  cardLedgerRoute,
+  cardRoomBackTarget,
+  getCardPayloadUserId,
+  memberStatusText,
+  sanitizeMoneyInput,
+} from '../utils/cardRoom';
 import { getRequestErrorMessage, isUnauthorizedError } from '../utils/http';
+import { formatClockTime } from '../utils/time';
 
 type SettlementTransfer = {
   fromUserId: number;
@@ -45,7 +56,6 @@ const room = ref<CardRoomVO | null>(null);
 const currentUser = ref<User | null>(null);
 const loading = ref(true);
 const loginRequired = ref(false);
-const POSITIVE_INTEGER_PATTERN = /^[1-9]\d{0,5}$/;
 
 const showTransfer = ref(false);
 const transferAmounts = ref<Record<number, string>>({});
@@ -62,12 +72,14 @@ const undoTarget = ref<UndoTarget | null>(null);
 const settlementTab = ref(0);
 
 const isOwner = computed(() => room.value?.ownerId === currentUser.value?.id);
-const isEnded = computed(() => room.value?.status === 1);
-const activeMembers = computed(() => room.value?.members.filter((m) => m.status === 0) ?? []);
+const isEnded = computed(() => room.value?.status === CARD_ROOM_STATUS.ENDED);
+const activeMembers = computed(() =>
+  room.value?.members.filter((m) => m.status === CARD_MEMBER_STATUS.ACTIVE) ?? [],
+);
 const currentMember = computed(() =>
   room.value?.members.find((member) => member.userId === currentUser.value?.id),
 );
-const isCurrentActiveMember = computed(() => currentMember.value?.status === 0);
+const isCurrentActiveMember = computed(() => currentMember.value?.status === CARD_MEMBER_STATUS.ACTIVE);
 const settlementMembers = computed(() => room.value?.members ?? []);
 const otherMembers = computed(() => activeMembers.value.filter((m) => m.userId !== currentUser.value?.id));
 const fundCandidates = computed(() => otherMembers.value);
@@ -219,23 +231,12 @@ const handleRequestError = (error: unknown, fallback: string) => {
   showNotify(getRequestErrorMessage(error, fallback));
 };
 
-const getPayloadUserId = (data: unknown) => {
-  if (!data || typeof data !== 'object' || !('id' in data)) return null;
-  const id = (data as { id?: unknown }).id;
-  return typeof id === 'number' ? id : null;
-};
-
 const goToLedger = () => {
-  router.replace({
-    path: '/discover/card-ledger',
-    query: { skipActiveRoom: '1' },
-  });
+  router.replace(cardLedgerRoute());
 };
 
 const updateBackTarget = (targetRoom: CardRoomVO | null) => {
-  route.meta.backTarget = targetRoom?.status === 1
-    ? '/discover/card-ledger?skipActiveRoom=1'
-    : '/discover';
+  route.meta.backTarget = cardRoomBackTarget(targetRoom);
 };
 
 const loadRoom = async () => {
@@ -277,7 +278,7 @@ onMounted(async () => {
       if (payload.roomId !== roomId) return;
       if (
         payload.type === CardWsEvent.MEMBER_LEFT
-        && getPayloadUserId(payload.data) === currentUser.value?.id
+        && getCardPayloadUserId(payload.data) === currentUser.value?.id
       ) {
         disconnect();
         showNotify('你已被房主移出房间');
@@ -376,11 +377,11 @@ const submitTransfer = async () => {
 };
 
 const onTransferInput = (userId: number, value: string) => {
-  transferAmounts.value[userId] = value.replace(/\D/g, '').slice(0, 6);
+  transferAmounts.value[userId] = sanitizeMoneyInput(value);
 };
 
 const onQuickAmountInput = (value: string) => {
-  transferQuickAmount.value = value.replace(/\D/g, '').slice(0, 6);
+  transferQuickAmount.value = sanitizeMoneyInput(value);
 };
 
 const fillTransferForEveryone = () => {
@@ -404,7 +405,7 @@ const openFund = () => {
 };
 
 const handleKick = async (member: CardRoomMemberVO) => {
-  if (!isOwner.value || member.userId === currentUser.value?.id || member.status !== 0) return;
+  if (!isOwner.value || member.userId === currentUser.value?.id || member.status !== CARD_MEMBER_STATUS.ACTIVE) return;
   try {
     await showConfirmDialog({
       title: '踢出成员',
@@ -425,7 +426,7 @@ const handleKick = async (member: CardRoomMemberVO) => {
 };
 
 const handleApprove = async (member: CardRoomMemberVO) => {
-  if (!isOwner.value || member.userId === currentUser.value?.id || member.status !== 4) return;
+  if (!isOwner.value || member.userId === currentUser.value?.id || member.status !== CARD_MEMBER_STATUS.REJOIN_REQUEST) return;
   submitting.value = true;
   try {
     room.value = await approveMember(roomId, member.userId);
@@ -547,8 +548,6 @@ const mergeTransfers = (items: SettlementTransfer[]) => {
   });
   return Array.from(byPair.values()).filter((item) => item.amount > 0);
 };
-const formatTime = (time: string) =>
-  new Date(time).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 const undoHint = (status: { approvedCount: number; requiredCount: number; requesterName: string | null }) =>
   `${status.requesterName ?? '有人'}申请撤销，已同意 ${status.approvedCount}/${status.requiredCount}`;
 const canRequestUndo = (creatorId: number) =>
@@ -559,13 +558,6 @@ const formatFundShare = (fund: CardFundRecordVO) => {
 };
 const fundShareText = (fund: CardFundRecordVO) =>
   `每人平摊 ${formatFundShare(fund)} 元`;
-const memberStatusText = (member: CardRoomMemberVO) => {
-  if (member.status === 1) return '已退出';
-  if (member.status === 2) return '已结算';
-  if (member.status === 3) return '已踢出';
-  if (member.status === 4) return '申请加入';
-  return '在房间';
-};
 </script>
 
 <template>
@@ -605,7 +597,7 @@ const memberStatusText = (member: CardRoomMemberVO) => {
             v-for="member in room.members"
             :key="member.userId"
             class="member-item"
-            :class="{ left: member.status !== 0 }"
+            :class="{ left: member.status !== CARD_MEMBER_STATUS.ACTIVE }"
           >
             <van-image round width="40" height="40" fit="cover" :src="member.avatarUrl || undefined">
               <template #error>
@@ -616,7 +608,7 @@ const memberStatusText = (member: CardRoomMemberVO) => {
               <div class="member-name-row">
                 <span class="member-name">{{ member.username }}</span>
                 <b v-if="member.userId === room.ownerId" class="owner-tag">房主</b>
-                <small v-if="member.status !== 0">{{ memberStatusText(member) }}</small>
+                <small v-if="member.status !== CARD_MEMBER_STATUS.ACTIVE">{{ memberStatusText(member) }}</small>
               </div>
               <span
                 :class="[
@@ -627,7 +619,7 @@ const memberStatusText = (member: CardRoomMemberVO) => {
                 {{ formatScore(member.totalScore) }} 元
               </span>
               <van-button
-                v-if="isOwner && !isEnded && member.status === 0 && member.userId !== currentUser?.id"
+                v-if="isOwner && !isEnded && member.status === CARD_MEMBER_STATUS.ACTIVE && member.userId !== currentUser?.id"
                 size="mini"
                 plain
                 type="danger"
@@ -638,7 +630,7 @@ const memberStatusText = (member: CardRoomMemberVO) => {
                 踢出
               </van-button>
               <van-button
-                v-else-if="isOwner && !isEnded && member.status === 4"
+                v-else-if="isOwner && !isEnded && member.status === CARD_MEMBER_STATUS.REJOIN_REQUEST"
                 size="mini"
                 plain
                 type="success"
@@ -697,7 +689,7 @@ const memberStatusText = (member: CardRoomMemberVO) => {
             <div v-for="round in room.recentRounds" :key="round.roundId" class="record-card">
               <div class="record-head">
                 <span>收支记录</span>
-                <time>{{ formatTime(round.createTime) }}</time>
+                <time>{{ formatClockTime(round.createTime) }}</time>
               </div>
               <div class="record-scores">
                 <span v-for="score in round.scores" :key="score.userId">
@@ -740,7 +732,7 @@ const memberStatusText = (member: CardRoomMemberVO) => {
               <div class="record-head">
                 <span>资金平摊</span>
                 <b>{{ formatMoney(fund.amount) }} 元</b>
-                <time>{{ formatTime(fund.createTime) }}</time>
+                <time>{{ formatClockTime(fund.createTime) }}</time>
               </div>
               <div class="fund-share-line">
                 {{ fundShareText(fund) }}
@@ -912,7 +904,7 @@ const memberStatusText = (member: CardRoomMemberVO) => {
             maxlength="6"
             placeholder="0"
             class="fund-amount-input"
-            @input="fundAmount = fundAmount.replace(/\D/g, '').slice(0, 6)"
+            @input="fundAmount = sanitizeMoneyInput(fundAmount)"
           />
           <span class="fund-unit">元</span>
         </div>

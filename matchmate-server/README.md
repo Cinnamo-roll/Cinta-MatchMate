@@ -122,8 +122,8 @@ WebSocket 路径：`/api/ws/chat`
 
 核心对象：
 
-- `CardRoom`：房间，包含房间码、房主、状态。
-- `CardRoomMember`：房间成员，包含总分、结算分、胜负统计。
+- `CardRoom`：房间，包含房间码、房间密码、房主、状态。
+- `CardRoomMember`：房间成员，包含总分、结算分、胜负统计和成员状态。
 - `CardRound`：一局转账记录。
 - `CardRoundScore`：一局中每个用户的分数变化。
 - `CardFundRecord`：资金平摊记录。
@@ -142,6 +142,8 @@ WebSocket 路径：`/api/ws/chat`
 | `GET` | `/card-room/history` | 房间历史 |
 | `GET` | `/card-room/ranking` | 牌友排名 |
 | `POST` | `/card-room/{roomId}/leave` | 退出房间 |
+| `POST` | `/card-room/{roomId}/member/{userId}/kick` | 房主踢出成员 |
+| `POST` | `/card-room/{roomId}/member/{userId}/approve` | 房主同意被踢成员重新加入 |
 | `POST` | `/card-room/{roomId}/transfer` | 添加转账记录 |
 | `POST` | `/card-room/{roomId}/fund` | 添加资金平摊 |
 | `POST` | `/card-room/{roomId}/end` | 结束房间 |
@@ -154,11 +156,15 @@ WebSocket 路径：`/api/ws/card/{roomId}`
 模块设计要点：
 
 - 房间操作校验登录用户是否为成员。
+- 创建房间时生成 6 位房间码和 4 位房间密码，加入房间时同时校验两者。
+- 成员状态覆盖在房间、已退出、已结算、已踢出和申请重新加入，支撑房主踢人和重新加入审批流程。
 - 结束房间、离开房间等操作校验房间状态。
 - 转账记录要求收支总和为 0。
 - 资金平摊要求参与者是当前房间成员。
+- 房间只有单人时，前端禁止写入记录；后端历史查询会过滤无任何收支记录的已结束空房间。
 - 写入局数和资金记录时使用 Redisson 锁避免并发导致序号或分数异常。
 - 业务提交成功后再推送 WebSocket 事件。
+- WebSocket 握手允许活跃成员和申请重新加入成员连接，以便成员状态变更后能够实时刷新。
 - 撤销操作通过申请和审批完成，避免单人误删影响其他成员。
 
 ## 缓存设计
