@@ -32,7 +32,7 @@ matchmate-mobile/
 │   ├── models/       # TypeScript 类型定义
 │   ├── pages/        # 页面组件
 │   ├── plugins/      # Axios 实例等插件
-│   ├── styles/       # 全局样式、主题、认证页样式
+│   ├── styles/       # 全局样式、主题、认证页样式和标签样式
 │   ├── utils/        # 工具函数
 │   ├── App.vue
 │   └── main.ts
@@ -68,6 +68,7 @@ matchmate-mobile/
 | `/admin/registrations` | `AdminRegistrations.vue` | 注册审核 |
 | `/login` | `Login.vue` | 登录 |
 | `/register` | `Register.vue` | 注册 |
+| `/:pathMatch(.*)*` | `NotFound.vue` | 页面不存在 |
 
 路由元信息中维护了页面标题、是否展示返回按钮、是否隐藏底部栏、是否锁定滚动等状态，基础布局根据这些元信息统一控制导航结构。
 

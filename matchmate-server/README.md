@@ -26,6 +26,7 @@
 ```text
 matchmate-server/
 ├── pom.xml
+├── mvnw
 ├── mvnw.cmd
 ├── src/
 │   ├── main/
@@ -65,7 +66,6 @@ matchmate-server/
 | `OSS_ACCESS_KEY_SECRET` | — | 阿里云 OSS Secret |
 | `OSS_BUCKET_NAME` | — | OSS Bucket 名称 |
 | `OSS_ENDPOINT` | — | OSS Endpoint |
-| `REGISTER_LIMIT` | `10` | 每日注册人数上限 |
 
 ## 用户模块
 
@@ -77,26 +77,34 @@ matchmate-server/
 | `POST` | `/user/login` | 登录 |
 | `POST` | `/user/logout` | 退出登录 |
 | `GET` | `/user/current` | 获取当前用户 |
-| `PUT` | `/user/update` | 更新个人资料 |
-| `PUT` | `/user/update-tags` | 更新标签 |
-| `POST` | `/user/upload-avatar` | 上传头像 |
-| `PUT` | `/user/change-password` | 修改密码 |
-| `POST` | `/user/deactivate` | 注销账号 |
+| `PUT` | `/user/current` | 更新个人资料 |
+| `PUT` | `/user/tags` | 更新标签 |
+| `POST` | `/user/avatar` | 上传头像 |
+| `PUT` | `/user/password` | 修改密码 |
+| `DELETE` | `/user/current` | 注销账号 |
 | `GET` | `/user/recommend` | 推荐伙伴 |
-| `GET` | `/user/search` | 搜索用户 |
+| `GET` | `/user/search/tags` | 搜索用户 |
 
-注册审核相关（管理员）：
+管理员相关接口（复用 UserController，需管理员权限）：
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| `GET` | `/admin/users` | 查询用户列表 |
-| `PUT` | `/admin/user/{id}/ban` | 封禁用户 |
-| `PUT` | `/admin/user/{id}/unban` | 解封用户 |
-| `GET` | `/admin/registration-strategy` | 查看注册策略 |
-| `PUT` | `/admin/registration-strategy` | 修改注册限额 |
-| `GET` | `/admin/registrations` | 查看待审核用户 |
-| `PUT` | `/admin/registration/{id}/approve` | 同意注册 |
-| `PUT` | `/admin/registration/{id}/reject` | 拒绝注册 |
+| `GET` | `/user/search` | 查询用户列表 |
+| `DELETE` | `/user/{id}` | 删除用户 |
+| `PUT` | `/user/{id}/status` | 封禁或解封用户 |
+| `GET` | `/user/registration/policy` | 查看注册策略 |
+| `PUT` | `/user/registration/policy` | 修改注册限额 |
+| `GET` | `/user/registration/pending` | 查看待审核用户 |
+| `PUT` | `/user/registration/{id}/approve` | 同意注册 |
+| `PUT` | `/user/registration/{id}/reject` | 拒绝注册 |
+
+## 标签模块
+
+标签模块位于 `tag` 包，核心接口：
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/tag/categories` | 获取标签分类列表 |
 
 ## 聊天模块
 
@@ -169,7 +177,19 @@ WebSocket 路径：`/api/ws/card/{roomId}`
 
 ## 缓存设计
 
-项目使用 Redis 缓存以下数据：
+### 缓存预热与定时刷新
+
+应用启动后通过 `ApplicationReadyEvent` 异步预热标签分类等热点数据到 Redis；定时刷新标签缓存（默认 1 小时间隔）。预热与刷新均使用 Redisson 分布式锁，防止多实例集群中重复执行。
+
+### 缓存读写策略
+
+采用 Cache-Aside 模式，通过 `DistributedCacheService` 统一管理：
+
+- 读：命中直接返回；未命中 → Redisson 分布式锁 → 双重检查 → 回源数据库 → 回写 Redis。
+- 写：数据库更新后，通过 `CacheInvalidationService` 注册 Spring 事务回调，仅在事务提交后删除相关缓存，避免并发读到脏数据。
+- 降级：Redis 不可用时静默降级到直接查 DB，不影响业务。
+
+### 缓存数据
 
 - 标签分类与用户标签。
 - 用户展示视图。
@@ -177,7 +197,7 @@ WebSocket 路径：`/api/ws/card/{roomId}`
 - 聊天未读数与当前打开会话。
 - 最近在线时间与会话列表缓存。
 
-缓存失效由 `CacheInvalidationService` 统一处理：用户资料、标签、头像、状态发生变化时，删除相关视图、搜索和推荐缓存。
+缓存失效由 `CacheInvalidationService` 统一处理：用户资料、标签、头像、状态变化 → 事务提交后 → 删除对应视图缓存并清空搜索/推荐集合缓存。
 
 ## 文件上传
 
