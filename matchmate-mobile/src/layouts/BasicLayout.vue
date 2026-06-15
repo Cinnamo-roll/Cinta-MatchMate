@@ -42,6 +42,12 @@ const activeTab = computed<TabName>({
 });
 
 const onClickLeft = () => {
+  const backTarget = route.meta.backTarget;
+  if (typeof backTarget === 'string' && backTarget) {
+    router.replace(backTarget);
+    return;
+  }
+
   if (window.history.length > 1) {
     router.back();
     return;

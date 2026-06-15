@@ -3,6 +3,7 @@
 export type CardRoomVO = {
   roomId: number;
   roomCode: string;
+  roomPassword: string;
   ownerId: number;
   ownerName: string;
   status: number;

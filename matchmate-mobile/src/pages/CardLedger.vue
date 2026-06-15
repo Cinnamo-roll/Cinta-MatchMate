@@ -23,6 +23,7 @@ const loading = ref(false);
 const loadFailed = ref(false);
 const loginRequired = ref(false);
 const joinCode = ref('');
+const joinPassword = ref('');
 const showJoin = ref(false);
 const checking = ref(true);
 const ranking = ref<User[]>([]);
@@ -35,10 +36,12 @@ const loadData = async () => {
   try {
     const user = await getCurrentUser(true);
     currentUser.value = user;
-    const active = await getActiveRoom();
-    if (active) {
-      router.replace(`/card-room/${active.roomId}`);
-      return;
+    if (route.query.skipActiveRoom !== '1') {
+      const active = await getActiveRoom();
+      if (active) {
+        router.replace(`/card-room/${active.roomId}`);
+        return;
+      }
     }
     const [r, h] = await Promise.all([
       getCardRanking(),
@@ -103,15 +106,21 @@ const handleJoin = async () => {
     return;
   }
   const code = joinCode.value.trim();
+  const password = joinPassword.value.trim();
   if (!code || code.length !== 6 || !/^\d{6}$/.test(code)) {
     showNotify('请输入6位数字房间号');
     return;
   }
+  if (!password || password.length !== 4 || !/^\d{4}$/.test(password)) {
+    showNotify('请输入4位数字房间密码');
+    return;
+  }
   loading.value = true;
   try {
-    const room = await joinRoom(code);
+    const room = await joinRoom(code, password);
     showJoin.value = false;
     joinCode.value = '';
+    joinPassword.value = '';
     router.replace(`/card-room/${room.roomId}`);
   } catch (error) {
     if (isUnauthorizedError(error)) {
@@ -215,12 +224,15 @@ const formatDate = (value: string) =>
         :confirm-button-loading="loading"
         :before-close="(action: string) => {
           if (action === 'confirm') handleJoin();
-          else { showJoin = false; joinCode = ''; }
+          else { showJoin = false; joinCode = ''; joinPassword = ''; }
           return false;
         }">
         <van-field v-model="joinCode" type="digit" maxlength="6" placeholder="请输入6位数字房间号"
           autofocus :border="false"
           style="text-align:center;font-size:22px;letter-spacing:4px;" />
+        <van-field v-model="joinPassword" type="digit" maxlength="4" placeholder="请输入4位数字密码"
+          :border="false"
+          style="text-align:center;font-size:20px;letter-spacing:4px;" />
       </van-dialog>
     </template>
   </div>

@@ -29,7 +29,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/card-room/:id',
     component: () => import('../pages/CardRoom.vue'),
-    meta: { title: '房间', showBack: true, hideTabbar: true, lockScroll: true },
+    meta: { title: '房间', showBack: true, hideTabbar: true, lockScroll: true, backTarget: '/discover' },
   },
   {
     path: '/chat/:id',

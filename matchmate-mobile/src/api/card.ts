@@ -15,9 +15,9 @@ const unwrap = <T>(response: AxiosResponse<BaseResponse<T>>) =>
 export const createRoom = async () =>
   unwrap(await myAxios.post<BaseResponse<CardRoomVO>>('/card-room/create'));
 
-export const joinRoom = async (roomCode: string) =>
+export const joinRoom = async (roomCode: string, roomPassword: string) =>
   unwrap(
-    await myAxios.post<BaseResponse<CardRoomVO>>('/card-room/join', { roomCode }),
+    await myAxios.post<BaseResponse<CardRoomVO>>('/card-room/join', { roomCode, roomPassword }),
   );
 
 export const getRoomDetail = async (roomId: number) =>
@@ -43,6 +43,20 @@ export const getCardRanking = async (limit = 20) =>
 export const leaveRoom = async (roomId: number) => {
   await myAxios.post<BaseResponse<null>>(`/card-room/${roomId}/leave`);
 };
+
+export const kickMember = async (roomId: number, userId: number) =>
+  unwrap(
+    await myAxios.post<BaseResponse<CardRoomVO>>(
+      `/card-room/${roomId}/member/${userId}/kick`,
+    ),
+  );
+
+export const approveMember = async (roomId: number, userId: number) =>
+  unwrap(
+    await myAxios.post<BaseResponse<CardRoomVO>>(
+      `/card-room/${roomId}/member/${userId}/approve`,
+    ),
+  );
 
 export const addTransfer = async (roomId: number, req: AddTransferRequest) =>
   unwrap(

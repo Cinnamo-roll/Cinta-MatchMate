@@ -7,6 +7,8 @@ import { useCardWebSocket } from '../composables/useCardWebSocket';
 import {
   getRoomDetail,
   leaveRoom,
+  kickMember,
+  approveMember,
   addTransfer,
   addFund,
   endRoom,
@@ -47,6 +49,7 @@ const POSITIVE_INTEGER_PATTERN = /^[1-9]\d{0,5}$/;
 
 const showTransfer = ref(false);
 const transferAmounts = ref<Record<number, string>>({});
+const transferQuickAmount = ref('');
 const submitting = ref(false);
 
 const showFund = ref(false);
@@ -61,9 +64,17 @@ const settlementTab = ref(0);
 const isOwner = computed(() => room.value?.ownerId === currentUser.value?.id);
 const isEnded = computed(() => room.value?.status === 1);
 const activeMembers = computed(() => room.value?.members.filter((m) => m.status === 0) ?? []);
+const currentMember = computed(() =>
+  room.value?.members.find((member) => member.userId === currentUser.value?.id),
+);
+const isCurrentActiveMember = computed(() => currentMember.value?.status === 0);
 const settlementMembers = computed(() => room.value?.members ?? []);
 const otherMembers = computed(() => activeMembers.value.filter((m) => m.userId !== currentUser.value?.id));
 const fundCandidates = computed(() => otherMembers.value);
+const canWriteRecords = computed(() => isCurrentActiveMember.value && activeMembers.value.length >= 2);
+const hasRoomRecords = computed(() =>
+  Boolean(room.value?.recentRounds?.length || room.value?.recentFunds?.length),
+);
 
 const transferSum = computed(() =>
   Object.values(transferAmounts.value).reduce(
@@ -208,6 +219,25 @@ const handleRequestError = (error: unknown, fallback: string) => {
   showNotify(getRequestErrorMessage(error, fallback));
 };
 
+const getPayloadUserId = (data: unknown) => {
+  if (!data || typeof data !== 'object' || !('id' in data)) return null;
+  const id = (data as { id?: unknown }).id;
+  return typeof id === 'number' ? id : null;
+};
+
+const goToLedger = () => {
+  router.replace({
+    path: '/discover/card-ledger',
+    query: { skipActiveRoom: '1' },
+  });
+};
+
+const updateBackTarget = (targetRoom: CardRoomVO | null) => {
+  route.meta.backTarget = targetRoom?.status === 1
+    ? '/discover/card-ledger?skipActiveRoom=1'
+    : '/discover';
+};
+
 const loadRoom = async () => {
   if (!Number.isSafeInteger(roomId) || roomId <= 0) {
     loading.value = false;
@@ -222,6 +252,7 @@ const loadRoom = async () => {
     ]);
     room.value = roomDetail;
     currentUser.value = user;
+    updateBackTarget(roomDetail);
   } catch (error) {
     if (isUnauthorizedError(error)) {
       loginRequired.value = true;
@@ -244,6 +275,15 @@ onMounted(async () => {
     connect(roomId);
     unsubWs = onMessage((payload: CardWsPayload) => {
       if (payload.roomId !== roomId) return;
+      if (
+        payload.type === CardWsEvent.MEMBER_LEFT
+        && getPayloadUserId(payload.data) === currentUser.value?.id
+      ) {
+        disconnect();
+        showNotify('你已被房主移出房间');
+        goToLedger();
+        return;
+      }
       if (payload.type === CardWsEvent.ROOM_CLOSED) disconnect();
       if (refreshTimer) clearTimeout(refreshTimer);
       refreshTimer = setTimeout(loadRoom, 100);
@@ -255,6 +295,7 @@ onUnmounted(() => {
   if (refreshTimer) clearTimeout(refreshTimer);
   unsubWs?.();
   disconnect();
+  route.meta.backTarget = '/discover';
 });
 
 const handleLeave = async () => {
@@ -265,7 +306,7 @@ const handleLeave = async () => {
   }
   try {
     await leaveRoom(roomId);
-    router.replace('/discover/card-ledger');
+    goToLedger();
   } catch (error) {
     handleRequestError(error, '退出房间失败');
   }
@@ -275,13 +316,16 @@ const handleEnd = async () => {
   try {
     await showConfirmDialog({
       title: '结束房间',
-      message: '会保存本房间的输赢结果，确定结束吗？',
+      message: hasRoomRecords.value
+        ? '会保存本房间的输赢结果，确定结束吗？'
+        : '当前没有任何收支记录，结束后不会出现在最近记录中，确定结束吗？',
     });
   } catch {
     return;
   }
   try {
     room.value = await endRoom(roomId);
+    updateBackTarget(room.value);
     showNotify('房间已结算', 'success');
   } catch (error) {
     handleRequestError(error, '结算失败');
@@ -290,6 +334,11 @@ const handleEnd = async () => {
 
 const openTransfer = () => {
   if (!room.value || !currentUser.value) return;
+  if (!canWriteRecords.value) {
+    showNotify('房间至少需要2个人才能记一笔');
+    return;
+  }
+  transferQuickAmount.value = '';
   transferAmounts.value = {};
   otherMembers.value.forEach((member) => {
     transferAmounts.value[member.userId] = '';
@@ -330,10 +379,62 @@ const onTransferInput = (userId: number, value: string) => {
   transferAmounts.value[userId] = value.replace(/\D/g, '').slice(0, 6);
 };
 
+const onQuickAmountInput = (value: string) => {
+  transferQuickAmount.value = value.replace(/\D/g, '').slice(0, 6);
+};
+
+const fillTransferForEveryone = () => {
+  if (!POSITIVE_INTEGER_PATTERN.test(transferQuickAmount.value)) {
+    showNotify('请输入1到999999的正整数金额');
+    return;
+  }
+  otherMembers.value.forEach((member) => {
+    transferAmounts.value[member.userId] = transferQuickAmount.value;
+  });
+};
+
 const openFund = () => {
+  if (!canWriteRecords.value) {
+    showNotify('房间至少需要2个人才能发起平摊');
+    return;
+  }
   fundAmount.value = '';
   fundParticipantIds.value = fundCandidates.value.map((member) => member.userId);
   showFund.value = true;
+};
+
+const handleKick = async (member: CardRoomMemberVO) => {
+  if (!isOwner.value || member.userId === currentUser.value?.id || member.status !== 0) return;
+  try {
+    await showConfirmDialog({
+      title: '踢出成员',
+      message: `确定将 ${member.username} 移出房间吗？`,
+    });
+  } catch {
+    return;
+  }
+  submitting.value = true;
+  try {
+    room.value = await kickMember(roomId, member.userId);
+    showNotify('已踢出成员', 'success');
+  } catch (error) {
+    handleRequestError(error, '踢出成员失败');
+  } finally {
+    submitting.value = false;
+  }
+};
+
+const handleApprove = async (member: CardRoomMemberVO) => {
+  if (!isOwner.value || member.userId === currentUser.value?.id || member.status !== 4) return;
+  submitting.value = true;
+  try {
+    room.value = await approveMember(roomId, member.userId);
+    showNotify('已同意加入', 'success');
+  } catch (error) {
+    handleRequestError(error, '同意加入失败');
+  } finally {
+    submitting.value = false;
+  }
 };
 
 const submitFund = async () => {
@@ -461,6 +562,8 @@ const fundShareText = (fund: CardFundRecordVO) =>
 const memberStatusText = (member: CardRoomMemberVO) => {
   if (member.status === 1) return '已退出';
   if (member.status === 2) return '已结算';
+  if (member.status === 3) return '已踢出';
+  if (member.status === 4) return '申请加入';
   return '在房间';
 };
 </script>
@@ -483,7 +586,10 @@ const memberStatusText = (member: CardRoomMemberVO) => {
             {{ isEnded ? '已结束' : '进行中' }}
           </span>
         </div>
-        <span class="room-meta">{{ activeMembers.length }}/{{ room.maxMembers }} 人</span>
+        <div class="room-meta-block">
+          <span>{{ activeMembers.length }}/{{ room.maxMembers }} 人</span>
+          <small v-if="!isEnded">密码 {{ room.roomPassword }}</small>
+        </div>
       </header>
 
       <section class="room-panel member-section">
@@ -520,6 +626,28 @@ const memberStatusText = (member: CardRoomMemberVO) => {
               >
                 {{ formatScore(member.totalScore) }} 元
               </span>
+              <van-button
+                v-if="isOwner && !isEnded && member.status === 0 && member.userId !== currentUser?.id"
+                size="mini"
+                plain
+                type="danger"
+                :loading="submitting"
+                class="kick-btn"
+                @click="handleKick(member)"
+              >
+                踢出
+              </van-button>
+              <van-button
+                v-else-if="isOwner && !isEnded && member.status === 4"
+                size="mini"
+                plain
+                type="success"
+                :loading="submitting"
+                class="kick-btn"
+                @click="handleApprove(member)"
+              >
+                同意
+              </van-button>
             </div>
           </div>
         </div>
@@ -537,12 +665,18 @@ const memberStatusText = (member: CardRoomMemberVO) => {
             round
             type="primary"
             size="small"
-            :disabled="activeMembers.length < 2"
+            :disabled="!canWriteRecords"
             @click="openTransfer"
           >
             记一笔
           </van-button>
-          <van-button round type="warning" size="small" @click="openFund">
+          <van-button
+            round
+            type="warning"
+            size="small"
+            :disabled="!canWriteRecords"
+            @click="openFund"
+          >
             发起平摊
           </van-button>
           <van-button round plain type="primary" size="small" @click="openSettlement">
@@ -688,7 +822,7 @@ const memberStatusText = (member: CardRoomMemberVO) => {
         round
         type="primary"
         size="small"
-        @click="router.replace('/discover/card-ledger')"
+        @click="goToLedger"
       >
         返回记账本
       </van-button>
@@ -737,6 +871,21 @@ const memberStatusText = (member: CardRoomMemberVO) => {
           你将转出合计：<b>{{ transferSum.toFixed(0) }} 元</b>
         </div>
         <div class="amount-hint">仅支持正整数金额，单位为元</div>
+        <div class="quick-transfer">
+          <input
+            :value="transferQuickAmount"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            maxlength="6"
+            placeholder="每人金额"
+            class="quick-transfer-input"
+            @input="onQuickAmountInput(($event.target as HTMLInputElement).value)"
+          />
+          <van-button round size="small" type="primary" plain @click="fillTransferForEveryone">
+            给每个人填入
+          </van-button>
+        </div>
       </div>
     </van-dialog>
 
@@ -965,9 +1114,17 @@ const memberStatusText = (member: CardRoomMemberVO) => {
   border-radius: 10px;
 }
 
-.room-meta {
+.room-meta-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
   font-size: 13px;
   opacity: 0.85;
+}
+
+.room-meta-block small {
+  font-size: 11px;
 }
 
 .room-panel {
@@ -1056,6 +1213,7 @@ const memberStatusText = (member: CardRoomMemberVO) => {
   flex: 1;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -1093,6 +1251,10 @@ const memberStatusText = (member: CardRoomMemberVO) => {
   margin-left: 8px;
   font-weight: 600;
   font-size: 16px;
+}
+
+.kick-btn {
+  flex: 0 0 auto;
 }
 
 .positive {
@@ -1293,6 +1455,29 @@ const memberStatusText = (member: CardRoomMemberVO) => {
   color: var(--app-text-muted);
   font-size: 12px;
   text-align: center;
+}
+
+.quick-transfer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 4px;
+  border-top: 1px solid #f5f5f5;
+}
+
+.quick-transfer-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  font-size: 15px;
+  text-align: center;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  outline: none;
+}
+
+.quick-transfer-input:focus {
+  border-color: var(--app-primary);
 }
 
 .fund-form {
