@@ -24,6 +24,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.Random;
 
 @Component
@@ -49,6 +50,7 @@ public class CardRoomLifecycleProcessor {
 
         CardRoom room = new CardRoom();
         room.setRoomCode(generateRoomCode());
+        room.setRoomPassword(generateRoomPassword());
         room.setOwnerId(user.getId());
         room.setStatus(CardConstant.ROOM_STATUS_ACTIVE);
         room.setMaxMembers(CardConstant.DEFAULT_MAX_MEMBERS);
@@ -63,13 +65,16 @@ public class CardRoomLifecycleProcessor {
         return cardRoomViewAssembler.toRoomVO(room, user.getId());
     }
 
-    public CardRoomVO joinRoom(String roomCode, User user) {
+    public CardRoomVO joinRoom(String roomCode, String roomPassword, User user) {
         CardRoom initialRoom = cardRoomMapper.selectOne(
                 new LambdaQueryWrapper<CardRoom>()
                         .eq(CardRoom::getRoomCode, roomCode));
         if (initialRoom == null) throw new BusinessException(ErrorCode.ROOM_NOT_FOUND);
         if (initialRoom.getStatus() != CardConstant.ROOM_STATUS_ACTIVE) {
             throw new BusinessException(ErrorCode.ROOM_ALREADY_ENDED);
+        }
+        if (!Objects.equals(initialRoom.getRoomPassword(), roomPassword)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "房间密码错误");
         }
 
         return cardRedisLockExecutor.call(
@@ -106,6 +111,66 @@ public class CardRoomLifecycleProcessor {
                 user.getId(),
                 CardRoomEventType.MEMBER_LEFT,
                 userVO);
+    }
+
+    public CardRoomVO kickMember(Long roomId, Long targetUserId, User owner) {
+        CardRoom room = cardRoomAccessGuard.requireRoom(roomId);
+        cardRoomAccessGuard.requireOwner(room, owner.getId());
+        if (room.getStatus() != CardConstant.ROOM_STATUS_ACTIVE) {
+            throw new BusinessException(ErrorCode.ROOM_ALREADY_ENDED);
+        }
+        if (owner.getId().equals(targetUserId)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "房主不能踢出自己");
+        }
+
+        CardRoomMember member = cardRoomAccessGuard.requireActiveMember(roomId, targetUserId);
+        settleLeavingMember(member, CardConstant.MEMBER_STATUS_KICKED);
+
+        User targetUser = userMapper.selectById(targetUserId);
+        if (targetUser != null) {
+            cacheInvalidationService.userChanged(targetUserId);
+            UserVO userVO = userService.toUserVO(targetUser);
+            cardRoomEventPublisher.pushAfterCommit(
+                    roomId,
+                    owner.getId(),
+                    CardRoomEventType.MEMBER_LEFT,
+                    userVO);
+        }
+        return cardRoomViewAssembler.toRoomVO(room, owner.getId());
+    }
+
+    public CardRoomVO approveMember(Long roomId, Long targetUserId, User owner) {
+        CardRoom room = cardRoomAccessGuard.requireRoom(roomId);
+        cardRoomAccessGuard.requireOwner(room, owner.getId());
+        if (room.getStatus() != CardConstant.ROOM_STATUS_ACTIVE) {
+            throw new BusinessException(ErrorCode.ROOM_ALREADY_ENDED);
+        }
+        if (owner.getId().equals(targetUserId)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "房主无需同意自己加入");
+        }
+
+        CardRoomMember member = cardRoomAccessGuard.requireAnyMember(roomId, targetUserId);
+        if (member.getStatus() != CardConstant.MEMBER_STATUS_REJOIN_REQUEST) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "该成员没有重新加入申请");
+        }
+        assertRoomHasCapacity(room);
+
+        member.setStatus(CardConstant.MEMBER_STATUS_ACTIVE);
+        member.setJoinTime(new Date());
+        member.setLeaveTime(null);
+        cardRoomMemberMapper.updateById(member);
+
+        User targetUser = userMapper.selectById(targetUserId);
+        if (targetUser != null) {
+            cacheInvalidationService.userChanged(targetUserId);
+            UserVO userVO = userService.toUserVO(targetUser);
+            cardRoomEventPublisher.pushAfterCommit(
+                    roomId,
+                    owner.getId(),
+                    CardRoomEventType.MEMBER_JOINED,
+                    userVO);
+        }
+        return cardRoomViewAssembler.toRoomVO(room, owner.getId());
     }
 
     public CardRoomVO endRoom(Long roomId, User user) {
@@ -166,6 +231,17 @@ public class CardRoomLifecycleProcessor {
             member.setJoinTime(new Date());
             member.setLeaveTime(null);
             return publishJoinedAndBuildVO(room, user);
+        }
+        if (member.getStatus() == CardConstant.MEMBER_STATUS_KICKED) {
+            assertRoomHasCapacity(room);
+            member.setStatus(CardConstant.MEMBER_STATUS_REJOIN_REQUEST);
+            member.setJoinTime(new Date());
+            member.setLeaveTime(null);
+            cardRoomMemberMapper.updateById(member);
+            return publishJoinedAndBuildVO(room, user);
+        }
+        if (member.getStatus() == CardConstant.MEMBER_STATUS_REJOIN_REQUEST) {
+            return cardRoomViewAssembler.toRoomVO(room, user.getId());
         }
         throw new BusinessException(ErrorCode.ROOM_ALREADY_SETTLED, "你已结算该房间，不能重新加入");
     }
@@ -245,6 +321,25 @@ public class CardRoomLifecycleProcessor {
             }
         }
         throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成房间号失败，请重试");
+    }
+
+    private String generateRoomPassword() {
+        int min = (int) Math.pow(10, CardConstant.ROOM_PASSWORD_LENGTH - 1);
+        int max = (int) Math.pow(10, CardConstant.ROOM_PASSWORD_LENGTH) - 1;
+        return String.valueOf(min + RANDOM.nextInt(max - min + 1));
+    }
+
+    private void settleLeavingMember(CardRoomMember member, int targetStatus) {
+        int finalScore = member.getTotalScore();
+        int deltaWins = finalScore > 0 ? 1 : 0;
+        int deltaLosses = finalScore < 0 ? 1 : 0;
+        member.setStatus(targetStatus);
+        member.setSettleScore(finalScore);
+        member.setWins(member.getWins() + deltaWins);
+        member.setLosses(member.getLosses() + deltaLosses);
+        member.setLeaveTime(new Date());
+        cardRoomMemberMapper.updateById(member);
+        userMapper.addStats(member.getUserId(), finalScore, deltaWins, deltaLosses);
     }
 
     private void checkNotInActiveRoom(Long userId) {

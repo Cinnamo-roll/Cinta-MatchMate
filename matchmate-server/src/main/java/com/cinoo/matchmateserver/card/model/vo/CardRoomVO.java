@@ -16,6 +16,7 @@ public class CardRoomVO implements Serializable {
 
     private Long roomId;
     private String roomCode;
+    private String roomPassword;
     private Long ownerId;
     private String ownerName;
     private Integer status;

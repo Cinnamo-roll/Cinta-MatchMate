@@ -15,4 +15,9 @@ public class JoinRoomRequest {
     @Size(min = 6, max = 6, message = "房间号为6位数字")
     @Pattern(regexp = "\\d{6}", message = "房间号为6位数字")
     private String roomCode;
+
+    @NotBlank(message = "房间密码不能为空")
+    @Size(min = 4, max = 4, message = "房间密码为4位数字")
+    @Pattern(regexp = "\\d{4}", message = "房间密码为4位数字")
+    private String roomPassword;
 }

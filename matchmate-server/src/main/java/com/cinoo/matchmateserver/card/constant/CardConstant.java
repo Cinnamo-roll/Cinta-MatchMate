@@ -14,12 +14,15 @@ public final class CardConstant {
     public static final int MEMBER_STATUS_ACTIVE = 0;
     public static final int MEMBER_STATUS_LEFT = 1;
     public static final int MEMBER_STATUS_SETTLED = 2;
+    public static final int MEMBER_STATUS_KICKED = 3;
+    public static final int MEMBER_STATUS_REJOIN_REQUEST = 4;
 
     public static final int ROUND_UNSETTLED = 0;
     public static final int ROUND_SETTLED = 1;
 
     public static final int DEFAULT_MAX_MEMBERS = 8;
     public static final int ROOM_CODE_LENGTH = 6;
+    public static final int ROOM_PASSWORD_LENGTH = 4;
     public static final String ROOM_CODE_CHARS = "0123456789";
     public static final int HISTORY_RETENTION_COUNT = 6;
 

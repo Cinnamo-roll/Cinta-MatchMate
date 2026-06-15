@@ -402,6 +402,7 @@ class CardLedgerMapperTest {
     private CardRoom createRoom(String roomCode, Long ownerId) {
         CardRoom room = new CardRoom();
         room.setRoomCode(roomCode);
+        room.setRoomPassword("1234");
         room.setOwnerId(ownerId);
         room.setStatus(CardConstant.ROOM_STATUS_ACTIVE);
         room.setMaxMembers(8);

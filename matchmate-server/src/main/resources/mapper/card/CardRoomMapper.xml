@@ -38,6 +38,19 @@
         LEFT JOIN user owner ON owner.id = cr.ownerId
         WHERE crm.userId = #{userId}
           AND cr.isDelete = 0
+          AND (
+            cr.status != 1
+            OR EXISTS (
+              SELECT 1
+              FROM cardRound round_record
+              WHERE round_record.roomId = cr.id
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM card_fund_record fund_record
+              WHERE fund_record.room_id = cr.id
+            )
+          )
         ORDER BY cr.createTime DESC, cr.id DESC
         LIMIT #{limit}
     </select>

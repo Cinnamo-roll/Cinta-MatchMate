@@ -68,6 +68,7 @@ class CardRoomControllerTest {
     void joinRoom_notLoggedIn_shouldThrow() {
         JoinRoomRequest req = new JoinRoomRequest();
         req.setRoomCode("123456");
+        req.setRoomPassword("1234");
         assertThrows(BusinessException.class, () ->
                 controller.joinRoom(req, new MockHttpServletRequest()));
     }

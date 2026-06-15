@@ -22,7 +22,7 @@ public interface CardRoomService {
     /**
      * 通过房间号加入房间。
      */
-    CardRoomVO joinRoom(String roomCode, HttpServletRequest request);
+    CardRoomVO joinRoom(String roomCode, String roomPassword, HttpServletRequest request);
 
     /**
      * 获取房间详情。
@@ -48,6 +48,13 @@ public interface CardRoomService {
      * 成员退出房间。
      */
     void leaveRoom(Long roomId, HttpServletRequest request);
+
+    /**
+     * 房主踢出房间成员，被踢成员不能重新加入该房间。
+     */
+    CardRoomVO kickMember(Long roomId, Long userId, HttpServletRequest request);
+
+    CardRoomVO approveMember(Long roomId, Long userId, HttpServletRequest request);
 
     /**
      * 成员记一笔收支。当前用户向其他成员转账，金额合计必须为0。

@@ -217,7 +217,7 @@ class CardRoomServiceTest {
         when(cardRoomMapper.selectOne(any())).thenReturn(null);
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> cardRoomService.joinRoom("999999", otherRequest));
+                () -> cardRoomService.joinRoom("999999", "1234", otherRequest));
         assertEquals(ErrorCode.ROOM_NOT_FOUND.getCode(), ex.getCode());
     }
 
@@ -229,13 +229,14 @@ class CardRoomServiceTest {
         when(cardRoomMapper.selectOne(any())).thenReturn(endedRoom);
 
         assertThrows(BusinessException.class,
-                () -> cardRoomService.joinRoom("999999", otherRequest));
+                () -> cardRoomService.joinRoom("999999", "1234", otherRequest));
     }
 
     @Test
     void joinRoom_full_shouldThrow() {
         CardRoom room = new CardRoom();
         room.setId(1L);
+        room.setRoomPassword("1234");
         room.setStatus(CardConstant.ROOM_STATUS_ACTIVE);
         room.setMaxMembers(2);
         when(cardRoomMapper.selectOne(any())).thenReturn(room);
@@ -243,14 +244,29 @@ class CardRoomServiceTest {
         when(cardRoomMemberMapper.selectCount(any())).thenReturn(2L);
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> cardRoomService.joinRoom("123456", otherRequest));
+                () -> cardRoomService.joinRoom("123456", "1234", otherRequest));
         assertEquals(ErrorCode.ROOM_FULL.getCode(), ex.getCode());
+    }
+
+    @Test
+    void joinRoom_wrongPassword_shouldThrow() {
+        CardRoom room = new CardRoom();
+        room.setId(1L);
+        room.setRoomPassword("1234");
+        room.setStatus(CardConstant.ROOM_STATUS_ACTIVE);
+        when(cardRoomMapper.selectOne(any())).thenReturn(room);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> cardRoomService.joinRoom("123456", "9999", otherRequest));
+
+        assertEquals(ErrorCode.PARAM_ERROR.getCode(), ex.getCode());
     }
 
     @Test
     void joinRoom_alreadyInAnother_shouldThrow() {
         CardRoom room = new CardRoom();
         room.setId(1L);
+        room.setRoomPassword("1234");
         room.setStatus(CardConstant.ROOM_STATUS_ACTIVE);
         room.setMaxMembers(8);
         when(cardRoomMapper.selectOne(any())).thenReturn(room);
@@ -263,7 +279,7 @@ class CardRoomServiceTest {
         when(cardRoomMapper.selectActiveRoomByUserId(OTHER_ID)).thenReturn(otherRoom);
 
         assertThrows(BusinessException.class,
-                () -> cardRoomService.joinRoom("123456", otherRequest));
+                () -> cardRoomService.joinRoom("123456", "1234", otherRequest));
     }
 
     // ── 退出房间 ──
@@ -272,6 +288,7 @@ class CardRoomServiceTest {
     void joinRoom_leftMember_shouldReactivate() {
         CardRoom room = new CardRoom();
         room.setId(1L);
+        room.setRoomPassword("1234");
         room.setStatus(CardConstant.ROOM_STATUS_ACTIVE);
         room.setMaxMembers(8);
 
@@ -288,12 +305,39 @@ class CardRoomServiceTest {
         when(cardRoomMemberMapper.reactivate(leftMember.getId())).thenReturn(1);
         configureRoomView(room, List.of(leftMember));
 
-        CardRoomVO vo = cardRoomService.joinRoom("123456", otherRequest);
+        CardRoomVO vo = cardRoomService.joinRoom("123456", "1234", otherRequest);
 
         assertNotNull(vo);
         assertEquals(CardConstant.MEMBER_STATUS_ACTIVE, leftMember.getStatus());
         assertNull(leftMember.getLeaveTime());
         verify(cardRoomMemberMapper).reactivate(leftMember.getId());
+        verify(cardRoomMemberMapper, never()).insert(any(CardRoomMember.class));
+    }
+
+    @Test
+    void joinRoom_kickedMember_shouldRequestRejoin() {
+        CardRoom room = new CardRoom();
+        room.setId(1L);
+        room.setRoomPassword("1234");
+        room.setStatus(CardConstant.ROOM_STATUS_ACTIVE);
+        room.setMaxMembers(8);
+
+        CardRoomMember kickedMember = makeMember(room.getId(), OTHER_ID, 0);
+        kickedMember.setStatus(CardConstant.MEMBER_STATUS_KICKED);
+
+        when(cardRoomMapper.selectOne(any())).thenReturn(room);
+        when(cardRoomMapper.selectById(room.getId())).thenReturn(room);
+        when(cardRoomMapper.selectActiveRoomByUserId(OTHER_ID)).thenReturn(null);
+        when(cardRoomMemberMapper.selectOne(any())).thenReturn(kickedMember);
+        when(cardRoomMemberMapper.selectCount(any())).thenReturn(1L);
+        configureRoomView(room, List.of(makeMember(room.getId(), OWNER_ID, 0), kickedMember));
+
+        CardRoomVO vo = cardRoomService.joinRoom("123456", "1234", otherRequest);
+
+        assertNotNull(vo);
+        assertEquals(CardConstant.MEMBER_STATUS_REJOIN_REQUEST, kickedMember.getStatus());
+        verify(cardRoomMemberMapper).updateById(kickedMember);
+        verify(cardRoomMemberMapper, never()).reactivate(anyLong());
         verify(cardRoomMemberMapper, never()).insert(any(CardRoomMember.class));
     }
 
@@ -330,6 +374,46 @@ class CardRoomServiceTest {
         assertEquals(1, member.getWins());
         verify(userMapper).addStats(OTHER_ID, 7, 1, 0);
         verify(cacheInvalidationService).userChanged(OTHER_ID);
+    }
+
+    @Test
+    void kickMember_ownerShouldSettleAndBlockMember() {
+        CardRoom room = mockActiveRoom();
+        CardRoomMember member = makeMember(room.getId(), OTHER_ID, -5);
+        member.setId(22L);
+        configureRoomView(room, List.of(makeMember(room.getId(), OWNER_ID, 5), member));
+        when(cardRoomMemberMapper.selectOne(any())).thenReturn(member);
+
+        CardRoomVO vo = cardRoomService.kickMember(room.getId(), OTHER_ID, ownerRequest);
+
+        assertNotNull(vo);
+        assertEquals(CardConstant.MEMBER_STATUS_KICKED, member.getStatus());
+        assertEquals(Integer.valueOf(-5), member.getSettleScore());
+        assertEquals(1, member.getLosses());
+        verify(cardRoomMemberMapper).updateById(member);
+        verify(userMapper).addStats(OTHER_ID, -5, 0, 1);
+        verify(cacheInvalidationService).userChanged(OTHER_ID);
+        verify(cardWebSocketHandler).pushEvent(eq(room.getId()), eq(OWNER_ID), eq(CardRoomEventType.MEMBER_LEFT), any());
+    }
+
+    @Test
+    void approveMember_ownerShouldReactivateRequestedMember() {
+        CardRoom room = mockActiveRoom();
+        CardRoomMember member = makeMember(room.getId(), OTHER_ID, -5);
+        member.setId(23L);
+        member.setStatus(CardConstant.MEMBER_STATUS_REJOIN_REQUEST);
+        configureRoomView(room, List.of(makeMember(room.getId(), OWNER_ID, 5), member));
+        when(cardRoomMemberMapper.selectOne(any())).thenReturn(member);
+        when(cardRoomMemberMapper.selectCount(any())).thenReturn(1L);
+
+        CardRoomVO vo = cardRoomService.approveMember(room.getId(), OTHER_ID, ownerRequest);
+
+        assertNotNull(vo);
+        assertEquals(CardConstant.MEMBER_STATUS_ACTIVE, member.getStatus());
+        assertNull(member.getLeaveTime());
+        verify(cardRoomMemberMapper).updateById(member);
+        verify(cacheInvalidationService).userChanged(OTHER_ID);
+        verify(cardWebSocketHandler).pushEvent(eq(room.getId()), eq(OWNER_ID), eq(CardRoomEventType.MEMBER_JOINED), any());
     }
 
     @Test
@@ -663,6 +747,7 @@ class CardRoomServiceTest {
         CardRoom room = new CardRoom();
         room.setId(1L);
         room.setRoomCode("123456");
+        room.setRoomPassword("1234");
         room.setOwnerId(OWNER_ID);
         room.setStatus(CardConstant.ROOM_STATUS_ACTIVE);
         room.setMaxMembers(8);
@@ -674,6 +759,7 @@ class CardRoomServiceTest {
         CardRoom room = new CardRoom();
         room.setId(1L);
         room.setRoomCode("123456");
+        room.setRoomPassword("1234");
         room.setOwnerId(OWNER_ID);
         room.setStatus(CardConstant.ROOM_STATUS_ENDED);
         when(cardRoomMapper.selectById(room.getId())).thenReturn(room);

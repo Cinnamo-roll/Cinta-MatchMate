@@ -53,9 +53,9 @@ public class CardRoomServiceImpl implements CardRoomService {
 
     @Override
     @Transactional
-    public CardRoomVO joinRoom(String roomCode, HttpServletRequest request) {
+    public CardRoomVO joinRoom(String roomCode, String roomPassword, HttpServletRequest request) {
         User user = loginUser(request);
-        return cardRoomLifecycleProcessor.joinRoom(roomCode, user);
+        return cardRoomLifecycleProcessor.joinRoom(roomCode, roomPassword, user);
     }
 
     @Override
@@ -97,6 +97,20 @@ public class CardRoomServiceImpl implements CardRoomService {
     public void leaveRoom(Long roomId, HttpServletRequest request) {
         User user = loginUser(request);
         cardRoomLifecycleProcessor.leaveRoom(roomId, user);
+    }
+
+    @Override
+    @Transactional
+    public CardRoomVO kickMember(Long roomId, Long userId, HttpServletRequest request) {
+        User user = loginUser(request);
+        return cardRoomLifecycleProcessor.kickMember(roomId, userId, user);
+    }
+
+    @Override
+    @Transactional
+    public CardRoomVO approveMember(Long roomId, Long userId, HttpServletRequest request) {
+        User user = loginUser(request);
+        return cardRoomLifecycleProcessor.approveMember(roomId, userId, user);
     }
 
     @Override

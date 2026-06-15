@@ -20,6 +20,8 @@ public class CardRoom {
 
     private String roomCode;
 
+    private String roomPassword;
+
     private Long ownerId;
 
     private Integer status;

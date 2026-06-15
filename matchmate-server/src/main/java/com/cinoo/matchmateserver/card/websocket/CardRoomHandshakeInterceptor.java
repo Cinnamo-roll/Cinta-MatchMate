@@ -13,7 +13,7 @@ import org.springframework.web.socket.server.HandshakeInterceptor;
 import java.util.Map;
 
 /**
- * Ensures a card-room WebSocket can only be opened by an active room member.
+ * Ensures a card-room WebSocket can only be opened by a room member who can see updates.
  */
 @Component
 public class CardRoomHandshakeInterceptor implements HandshakeInterceptor {
@@ -40,7 +40,9 @@ public class CardRoomHandshakeInterceptor implements HandshakeInterceptor {
                 new LambdaQueryWrapper<CardRoomMember>()
                         .eq(CardRoomMember::getRoomId, roomId)
                         .eq(CardRoomMember::getUserId, userId)
-                        .eq(CardRoomMember::getStatus, CardConstant.MEMBER_STATUS_ACTIVE)
+                        .in(CardRoomMember::getStatus,
+                                CardConstant.MEMBER_STATUS_ACTIVE,
+                                CardConstant.MEMBER_STATUS_REJOIN_REQUEST)
         ) > 0;
     }
 

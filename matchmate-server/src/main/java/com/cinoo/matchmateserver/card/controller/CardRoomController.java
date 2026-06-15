@@ -39,7 +39,7 @@ public class CardRoomController {
     public BaseResponse<CardRoomVO> joinRoom(
             @Valid @RequestBody JoinRoomRequest req,
             HttpServletRequest request) {
-        return ResultUtils.success(cardRoomService.joinRoom(req.getRoomCode(), request));
+        return ResultUtils.success(cardRoomService.joinRoom(req.getRoomCode(), req.getRoomPassword(), request));
     }
 
     @Operation(summary = "获取房间详情", description = "获取房间完整详情，含成员、最近收支和资金平摊")
@@ -80,6 +80,23 @@ public class CardRoomController {
             HttpServletRequest request) {
         cardRoomService.leaveRoom(roomId, request);
         return ResultUtils.success(null);
+    }
+
+    @Operation(summary = "踢出成员", description = "仅房主可踢出房间内其他成员，被踢成员不可重新加入该房间")
+    @PostMapping("/{roomId}/member/{userId}/kick")
+    public BaseResponse<CardRoomVO> kickMember(
+            @PathVariable Long roomId,
+            @PathVariable Long userId,
+            HttpServletRequest request) {
+        return ResultUtils.success(cardRoomService.kickMember(roomId, userId, request));
+    }
+
+    @PostMapping("/{roomId}/member/{userId}/approve")
+    public BaseResponse<CardRoomVO> approveMember(
+            @PathVariable Long roomId,
+            @PathVariable Long userId,
+            HttpServletRequest request) {
+        return ResultUtils.success(cardRoomService.approveMember(roomId, userId, request));
     }
 
     @Operation(summary = "记一笔收支", description = "成员向其他成员记一笔收支，转出记为负数、转入记为正数，金额合计必须为0")

@@ -169,6 +169,7 @@ DROP TABLE IF EXISTS `cardroom`;
 CREATE TABLE `cardroom` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '房间ID',
   `roomCode` char(6) NOT NULL COMMENT '6位数字房号',
+  `roomPassword` char(4) NOT NULL DEFAULT '0000' COMMENT '4位数字房间密码',
   `ownerId` bigint NOT NULL COMMENT '房主用户ID',
   `status` tinyint NOT NULL DEFAULT '0' COMMENT '状态: 0-进行中 1-已结束',
   `maxMembers` tinyint NOT NULL DEFAULT '8' COMMENT '最大成员数',

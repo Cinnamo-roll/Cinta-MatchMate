@@ -108,6 +108,7 @@ public class CardRoomViewAssembler {
         CardRoomVO vo = new CardRoomVO();
         vo.setRoomId(room.getId());
         vo.setRoomCode(room.getRoomCode());
+        vo.setRoomPassword(room.getRoomPassword());
         vo.setOwnerId(room.getOwnerId());
         vo.setStatus(room.getStatus());
         vo.setMaxMembers(room.getMaxMembers());
