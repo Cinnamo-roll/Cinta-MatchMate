@@ -1,7 +1,7 @@
 # MatchMate Docker 部署指南（实战记录）
 
-> 服务器：阿里云 ECS Ubuntu | IP：*  | 用户：admin
-> MySQL/Redis 密码：*  | 最后更新：2026-06-15
+> 服务器：阿里云 ECS Ubuntu | 用户：admin | 线上地址：[https://mate.cinoo.xyz](https://mate.cinoo.xyz)
+> 最后更新：2026-07-11
 
 ---
 
@@ -281,18 +281,18 @@ sudo cp .env.example .env
 sudo nano .env
 ```
 
-编辑后的 `.env` 内容（OSS 留空，暂不上传头像）：
+编辑后的 `.env` 内容（密码请使用独立强密码；OSS 留空时不启用头像上传）：
 
 ```
-DB_PASSWORD=Aurora520
-REDIS_PASSWORD=Aurora520
+DB_PASSWORD=<你的 MySQL 强密码>
+REDIS_PASSWORD=<你的 Redis 强密码>
 OSS_ENDPOINT=
 OSS_ACCESS_KEY_ID=
 OSS_ACCESS_KEY_SECRET=
 OSS_BUCKET_NAME=
 OSS_PUBLIC_BASE_URL=
-SESSION_COOKIE_SECURE=false
-MATCHMATE_CORS_ALLOWED_ORIGINS=
+SESSION_COOKIE_SECURE=true
+MATCHMATE_CORS_ALLOWED_ORIGINS=https://mate.cinoo.xyz
 ```
 
 > `Ctrl+O` 回车保存，`Ctrl+X` 退出。`cat .env` 确认。
@@ -369,7 +369,7 @@ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/
 # → 200
 ```
 
-浏览器访问 `你的服务器地址` 即可打开应用。
+本地验证通过后，可访问线上环境：[https://mate.cinoo.xyz](https://mate.cinoo.xyz)。
 
 ---
 
@@ -405,8 +405,8 @@ git pull
 sudo docker compose up -d --build        # --build 强制重新编译
 
 # ── 进入容器 ──
-sudo docker exec -it matchmate-mysql mysql -u root -p'Aurora520'
-sudo docker exec -it matchmate-redis redis-cli -a Aurora520
+sudo docker exec -it matchmate-mysql mysql -u root -p
+sudo docker exec -it matchmate-redis redis-cli -a '<你的 Redis 密码>'
 sudo docker exec -it matchmate-server sh
 
 # ── 查看资源占用 ──
@@ -419,17 +419,17 @@ sudo docker compose down -v              # 停容器 + 删除数据卷（数据�
 
 ---
 
-## 十、备案后：配置域名 + HTTPS
+## 十、生产域名与 HTTPS
 
 ```bash
 # 1. 修改 nginx.conf 的 server_name
 sudo nano /opt/matchmate/matchmate-mobile/nginx.conf
-# 把 server_name _; 改为 server_name your-domain.com;
+# 把 server_name _; 改为 server_name mate.cinoo.xyz;
 
 # 2. 修改 .env 开启 HTTPS Cookie
 sudo nano /opt/matchmate/.env
 # SESSION_COOKIE_SECURE=true
-# MATCHMATE_CORS_ALLOWED_ORIGINS=https://your-domain.com
+# MATCHMATE_CORS_ALLOWED_ORIGINS=https://mate.cinoo.xyz
 
 # 3. 重新构建 Nginx 容器
 sudo docker compose up -d --build nginx
@@ -437,7 +437,7 @@ sudo docker compose up -d --build nginx
 # 4. 申请 SSL 证书（certbot 需占用 80 端口，先停 nginx）
 sudo docker compose stop nginx
 sudo apt install certbot -y
-sudo certbot certonly --standalone -d your-domain.com
+sudo certbot certonly --standalone -d mate.cinoo.xyz
 sudo docker compose start nginx
 
 # 5. 将证书挂载进 Nginx（需修改 nginx.conf 添加 443 server 块 + ssl_certificate）

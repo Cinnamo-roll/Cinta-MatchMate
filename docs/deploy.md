@@ -1,6 +1,6 @@
 # MatchMate 轻量应用服务器部署文档
 
-> 从零开始手动部署 | 系统：Ubuntu
+> 从零开始手动部署 | 系统：Ubuntu | 线上地址：[https://mate.cinoo.xyz](https://mate.cinoo.xyz)
 
 ---
 
@@ -293,7 +293,7 @@ curl -s http://127.0.0.1/ | head -5
 journalctl -u matchmate-server -f
 ```
 
-浏览器访问 `http://你的服务器IP` 即可使用。
+本地验证通过后，可访问线上环境：[https://mate.cinoo.xyz](https://mate.cinoo.xyz)。
 
 ---
 
@@ -327,21 +327,21 @@ sudo systemctl reload nginx
 
 ---
 
-## 十一、备案通过后：配置域名 + HTTPS
+## 十一、生产域名与 HTTPS
 
 ```bash
 # 1. 修改 Nginx server_name
 sudo nano /etc/nginx/sites-available/matchmate
-# 把 server_name _; 改为 server_name 你的域名;
+# 把 server_name _; 改为 server_name mate.cinoo.xyz;
 
 # 2. 修改 CORS
 sudo nano /opt/matchmate/.env
-# MATCHMATE_CORS_ALLOWED_ORIGINS=http://你的域名
+# MATCHMATE_CORS_ALLOWED_ORIGINS=https://mate.cinoo.xyz
 # SESSION_COOKIE_SECURE=true
 
 # 3. 申请免费 SSL 证书
 sudo apt install certbot python3-certbot-nginx -y
-sudo certbot --nginx -d 你的域名
+sudo certbot --nginx -d mate.cinoo.xyz
 
 # 4. 防火墙开放 443 端口
 
