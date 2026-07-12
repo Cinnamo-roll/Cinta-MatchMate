@@ -1,3 +1,8 @@
+<!--
+Copyright 2026 CintaOvO
+Licensed under the Apache License, Version 2.0.
+Original project: https://github.com/Cinnamo-roll/Cinta-MatchMate
+-->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -16,6 +21,7 @@ import {
 } from '../api/matchmate';
 import type { UpdateUserProfileRequest } from '../models/api';
 import type { User } from '../models/user';
+import { PROJECT_INFO } from '../config/project';
 
 type EditableUserField = 'username' | 'gender' | 'phone' | 'email';
 
@@ -171,6 +177,7 @@ const saveUserTags = async () => {
 };
 
 const showMenu = ref(false);
+const showAbout = ref(false);
 const closeMenu = () => { showMenu.value = false; };
 
 const showPasswordPopup = ref(false);
@@ -424,7 +431,41 @@ const onAvatarFileSelected = async (event: Event) => {
         </div>
         <van-empty v-else image-size="64" description="还没有添加标签" />
       </section>
+
+      <van-cell-group class="about-entry">
+        <van-cell
+          title="关于本项目"
+          :label="`${PROJECT_INFO.name} ${PROJECT_INFO.version}`"
+          icon="info-o"
+          is-link
+          @click="showAbout = true"
+        />
+      </van-cell-group>
     </template>
+
+    <van-popup
+      v-model:show="showAbout"
+      position="bottom"
+      round
+      closeable
+      class="profile-bottom-popup"
+      :z-index="3000"
+      teleport="body"
+    >
+      <div class="about-popup">
+        <h3>{{ PROJECT_INFO.name }}</h3>
+        <p class="about-version">版本 {{ PROJECT_INFO.version }}</p>
+        <p>Original project by {{ PROJECT_INFO.author }}</p>
+        <a
+          :href="PROJECT_INFO.repositoryUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {{ PROJECT_INFO.repositoryUrl }}
+        </a>
+        <p class="about-license">{{ PROJECT_INFO.license }}</p>
+      </div>
+    </van-popup>
 
     <van-popup
       v-model:show="showEditor"
@@ -726,6 +767,37 @@ const onAvatarFileSelected = async (event: Event) => {
 
 .admin-entry {
   margin-top: 12px;
+}
+
+.about-entry {
+  margin-top: 12px;
+}
+
+.about-popup {
+  padding: 22px 20px calc(28px + var(--app-safe-bottom));
+  text-align: center;
+}
+
+.about-popup h3 {
+  margin: 0 0 6px;
+}
+
+.about-popup p {
+  margin: 8px 0;
+  color: var(--app-text-secondary);
+}
+
+.about-popup a {
+  display: inline-block;
+  max-width: 100%;
+  color: var(--app-primary);
+  overflow-wrap: anywhere;
+}
+
+.about-popup .about-version,
+.about-popup .about-license {
+  color: var(--app-text-muted);
+  font-size: 13px;
 }
 
 .tags-heading,

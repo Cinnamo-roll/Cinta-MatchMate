@@ -1,6 +1,9 @@
 /*
 !/.gitignore
 !/README.md
+!/LICENSE
+!/NOTICE
+!/AGENTS.md
 !/.env.example
 !/.dockerignore
 !/docker-compose.yml

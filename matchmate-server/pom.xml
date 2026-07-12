@@ -12,7 +12,32 @@
     <artifactId>matchmate-server</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>matchmate-server</name>
-    <description>matchmate-server</description>
+    <description>Backend service for the MatchMate partner matching system</description>
+    <url>https://github.com/Cinnamo-roll/Cinta-MatchMate</url>
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+    <developers>
+        <developer>
+            <name>CintaOvO</name>
+            <email>D1391571546@outlook.com</email>
+            <url>https://cinta.xyz</url>
+        </developer>
+    </developers>
+    <scm>
+        <connection>scm:git:https://github.com/Cinnamo-roll/Cinta-MatchMate.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/Cinnamo-roll/Cinta-MatchMate.git</developerConnection>
+        <url>https://github.com/Cinnamo-roll/Cinta-MatchMate</url>
+        <tag>HEAD</tag>
+    </scm>
+    <issueManagement>
+        <system>GitHub</system>
+        <url>https://github.com/Cinnamo-roll/Cinta-MatchMate/issues</url>
+    </issueManagement>
     <properties>
         <java.version>17</java.version>
     </properties>

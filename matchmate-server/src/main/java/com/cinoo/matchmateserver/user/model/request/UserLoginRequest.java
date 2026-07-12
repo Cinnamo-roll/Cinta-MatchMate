@@ -11,7 +11,7 @@ import java.io.Serializable;
 /**
  * 用户登录请求体
  *
- * @author CinnamoRoll
+ * @author CintaOvO
  */
 @Schema(description = "用户登录请求体")
 @Data

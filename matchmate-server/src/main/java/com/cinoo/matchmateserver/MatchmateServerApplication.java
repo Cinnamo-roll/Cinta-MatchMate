@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 CintaOvO
+ * Licensed under the Apache License, Version 2.0.
+ * Original project: https://github.com/Cinnamo-roll/Cinta-MatchMate
+ */
 package com.cinoo.matchmateserver;
 
 import org.mybatis.spring.annotation.MapperScan;

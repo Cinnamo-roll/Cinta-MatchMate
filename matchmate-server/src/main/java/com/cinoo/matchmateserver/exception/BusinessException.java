@@ -7,7 +7,7 @@ import org.springframework.http.HttpStatus;
 /**
  * 自定义异常类
  *
- * @author CinnamoRoll
+ * @author CintaOvO
  */
 @Getter
 public class BusinessException extends RuntimeException {

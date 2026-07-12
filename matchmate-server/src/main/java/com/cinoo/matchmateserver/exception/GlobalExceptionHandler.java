@@ -24,7 +24,7 @@ import java.util.Objects;
 /**
  * 全局异常处理器
  *
- * @author CinnamoRoll
+ * @author CintaOvO
  */
 @RestControllerAdvice
 @Slf4j

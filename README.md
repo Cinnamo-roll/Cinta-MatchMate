@@ -170,3 +170,16 @@ cd matchmate-server && mvnw.cmd -Dtest=UserServiceTest test
 - **打牌记账本完整闭环**：6 位房间码 + 4 位密码、成员 5 状态机（在房间/已退出/已结算/已踢出/申请重新加入）、撤销申请审批、资金平摊、房主踢人与重新加入审批、牌友排名。
 - **测试覆盖**：14 个后端测试类覆盖 Controller、Service、Mapper、WebSocket、分布式缓存和 OSS，确保核心链路回归验证。
 - **工程化**：前后端独立 README、环境变量说明、数据库初始化脚本、配置分离（application.yaml / application-prod.yaml）和 springdoc-openapi 文档，便于复现与交接。
+
+## Author
+
+- Created by **CintaOvO**
+- GitHub: [https://github.com/Cinnamo-roll](https://github.com/Cinnamo-roll)
+- Website: [https://cinta.xyz](https://cinta.xyz)
+- Original repository: [https://github.com/Cinnamo-roll/Cinta-MatchMate](https://github.com/Cinnamo-roll/Cinta-MatchMate)
+
+## Attribution
+
+本项目允许依照 [Apache License 2.0](LICENSE) 的条款使用、修改和分发。分发本项目或其重要衍生版本时，应保留适用的版权、许可证和署名声明。修改者应清楚标注其修改，不应使他人误以为修改版本仍由原作者维护或认可。
+
+项目署名详情见 [NOTICE](NOTICE)。第三方依赖继续适用各自的许可证与声明。

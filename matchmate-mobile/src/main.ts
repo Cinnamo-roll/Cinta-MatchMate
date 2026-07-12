@@ -1,3 +1,7 @@
+// Copyright 2026 CintaOvO
+// Licensed under the Apache License, Version 2.0.
+// Original project: https://github.com/Cinnamo-roll/Cinta-MatchMate
+
 import {createApp} from 'vue'
 import App from './App.vue'
 import {createRouter, createWebHistory} from 'vue-router'
