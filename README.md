@@ -175,7 +175,7 @@ cd matchmate-server && mvnw.cmd -Dtest=UserServiceTest test
 
 - Created by **CintaOvO**
 - GitHub: [https://github.com/Cinnamo-roll](https://github.com/Cinnamo-roll)
-- Website: [https://cinta.xyz](https://cinta.xyz)
+- Website: [https://cinno.xyz](https://cinno.xyz)
 - Original repository: [https://github.com/Cinnamo-roll/Cinta-MatchMate](https://github.com/Cinnamo-roll/Cinta-MatchMate)
 
 ## Attribution
