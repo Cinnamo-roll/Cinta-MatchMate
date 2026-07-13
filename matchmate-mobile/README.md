@@ -4,7 +4,7 @@
 
 前端按移动端 Web App 体验设计，重点处理了首屏加载、分页列表、固定导航、滚动区域、表单反馈、登录态缓存、WebSocket 连接和异常提示等细节。
 
-在线体验：[https://mate.cinoo.xyz](https://mate.cinoo.xyz) · [返回项目总览](../README.md)
+在线体验：[https://mate.cinoo.xyz](https://mate.cinoo.xyz)（网页不定期开放，可能暂时无法访问） · [返回项目总览](../README.md)
 
 ## 技术栈
 
@@ -175,7 +175,7 @@ WebSocket 路径：
 ## 本地运行
 
 ```bash
-npm install
+npm ci
 npm run dev       # 开发服务
 npm run build     # 生产构建
 npm run preview   # 预览构建结果

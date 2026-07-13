@@ -2,11 +2,12 @@
 
 MatchMate 是一个移动端伙伴匹配全栈项目，支持用户基于资料与兴趣标签发现伙伴、通过即时聊天建立联系。项目在核心匹配业务之外，还内置了打牌记账本模块，用于线下多人打牌时的分数记录、资金平摊与撤销审批。
 
-项目覆盖了用户体系、标签检索、推荐排序、即时通信、后台审核、单设备登录接管、Redis 缓存、WebSocket 实时推送、移动端交互优化和完整的数据库初始化数据，适合作为全栈项目展示或个人技术沉淀。
+项目覆盖了用户体系、标签检索、推荐排序、即时通信、后台审核、单设备登录接管、Redis 缓存、WebSocket 实时推送、移动端交互优化，以及可复现的数据库表结构与基础标签数据，适合作为全栈项目展示或个人技术沉淀。
 
 ## 在线体验
 
 - 产品地址：[https://mate.cinoo.xyz](https://mate.cinoo.xyz)
+- 状态说明：网页不定期开放，可能暂时无法访问，请稍后再试。
 - 推荐使用手机浏览器访问；桌面端可开启浏览器移动设备模式获得更完整的交互体验。
 
 ## 一句话概括
@@ -110,10 +111,11 @@ MatchMate/
 
 ## 数据库
 
-数据库初始化脚本位于 `matchmate-server/src/main/resources/schema.sql`，包含建库、建表、标签基础数据和脱敏示例数据（脱敏后用户密码均为 `MatchMate123`）。导入方式：
+数据库初始化脚本位于 `matchmate-server/src/main/resources/schema.sql`，包含表结构和标签基础数据，不包含用户、管理员、密码或线上业务数据。先创建数据库，再导入脚本：
 
 ```bash
-mysql -u root -p < matchmate-server/src/main/resources/schema.sql
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS matchmate CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -u root -p matchmate < matchmate-server/src/main/resources/schema.sql
 ```
 
 后端默认连接 `jdbc:mysql://localhost:3306/matchmate`。用户名、密码和地址可通过环境变量覆盖，详见 `matchmate-server/README.md`。
@@ -136,7 +138,7 @@ mvnw.cmd spring-boot:run
 
 ```bash
 cd matchmate-mobile
-npm install
+npm ci
 npm run dev
 ```
 

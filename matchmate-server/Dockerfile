@@ -11,7 +11,7 @@ RUN ./mvnw package -DskipTests -B
 FROM eclipse-temurin:17-jre-alpine
 LABEL org.opencontainers.image.title="MatchMate Server" \
       org.opencontainers.image.source="https://github.com/Cinnamo-roll/Cinta-MatchMate" \
-      org.opencontainers.image.authors="CintaOvO <D1391571546@outlook.com>" \
+      org.opencontainers.image.authors="CintaOvO (https://github.com/Cinnamo-roll)" \
       org.opencontainers.image.licenses="Apache-2.0"
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar

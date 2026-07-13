@@ -1,28 +1,34 @@
-# MatchMate 轻量应用服务器部署文档
+# MatchMate Ubuntu 手动部署指南
 
-> 从零开始手动部署 | 系统：Ubuntu | 线上地址：[https://mate.cinoo.xyz](https://mate.cinoo.xyz)
+> 适用于 Ubuntu 服务器上的 JDK、MySQL、Redis、Nginx 手动部署。
+>
+> MatchMate 在线体验：[https://mate.cinoo.xyz](https://mate.cinoo.xyz)。网页不定期开放，可能暂时无法访问，请稍后再试。
 
----
+## 部署前约定
 
-## 项目架构
+文中的占位符必须替换为自己的值：
 
-| 组件 | 技术栈 | 端口 |
-|------|--------|------|
-| 前端 | Vue 3 + Vite + Vant | Nginx:80 |
-| 后端 | Spring Boot 4.0.6 + Java 17 + Maven | 8080 |
-| 数据库 | MySQL 8 | 3306 |
-| 缓存 | Redis | 6379 |
-| 文件存储 | 阿里云 OSS | — |
-| 反向代理 | Nginx | 80 |
+| 占位符 | 含义 |
+| --- | --- |
+| `SERVER_IP` | 服务器公网 IP |
+| `DEPLOY_USER` | 用于 SSH/SCP 的服务器账号 |
+| `YOUR_DOMAIN` | 自己解析到服务器的域名 |
+| `REPLACE_WITH_*` | 需要自行生成并妥善保存的强密码或密钥 |
 
----
+生产环境应遵循以下原则：
 
-## 一、服务器环境安装
+- 只对公网开放 80/443，MySQL、Redis 和后端端口仅允许本机访问。
+- 不把 `.env`、数据库备份、日志或真实用户数据提交到 GitHub。
+- 数据库使用独立的 `matchmate` 账号，应用不使用 MySQL `root`。
+- 所有密码通过交互式提示或受权限保护的配置文件输入，避免出现在 Shell 历史中。
+
+## 一、安装运行环境
 
 ### 1.1 更新系统
 
 ```bash
-sudo apt update && sudo apt upgrade -y
+sudo apt update
+sudo apt upgrade -y
 ```
 
 ### 1.2 安装 JDK 17
@@ -32,204 +38,199 @@ sudo apt install openjdk-17-jdk -y
 java -version
 ```
 
-### 1.3 安装 MySQL
+### 1.3 安装并初始化 MySQL 8
 
 ```bash
 sudo apt install mysql-server -y
-sudo systemctl start mysql
-sudo systemctl enable mysql
+sudo systemctl enable --now mysql
 sudo mysql_secure_installation
-```
-
-安全初始化选项：密码策略选 0（LOW），全部选 Y。
-
-```bash
-# 进入 MySQL 改 root 密码认证方式
 sudo mysql
 ```
 
+在 MySQL 控制台执行，先替换密码占位符：
+
 ```sql
-ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '你的密码';
 CREATE DATABASE matchmate CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'matchmate'@'localhost' IDENTIFIED BY '你的密码';
+CREATE USER 'matchmate'@'localhost' IDENTIFIED BY 'REPLACE_WITH_DB_PASSWORD';
 GRANT ALL PRIVILEGES ON matchmate.* TO 'matchmate'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
 ```
 
-### 1.4 安装 Redis
+### 1.4 安装并配置 Redis
 
 ```bash
 sudo apt install redis-server -y
-sudo systemctl start redis-server
-sudo systemctl enable redis-server
-sudo sed -i 's/# requirepass foobared/requirepass 你的密码/' /etc/redis/redis.conf
-sudo systemctl restart redis-server
-redis-cli -a 你的密码 ping   # 应返回 PONG
+sudo systemctl enable --now redis-server
+sudoedit /etc/redis/redis.conf
 ```
+
+在配置文件中设置强密码：
+
+```text
+requirepass REPLACE_WITH_REDIS_PASSWORD
+```
+
+保存后重启并通过交互式密码提示验证：
+
+```bash
+sudo systemctl restart redis-server
+redis-cli --askpass ping
+```
+
+成功时返回 `PONG`。
 
 ### 1.5 安装 Nginx
 
 ```bash
 sudo apt install nginx -y
-sudo systemctl start nginx
-sudo systemctl enable nginx
+sudo systemctl enable --now nginx
 ```
-
----
 
 ## 二、本地构建
 
-### 2.1 后端
+在项目根目录执行。
+
+### 2.1 构建后端
 
 ```powershell
 cd matchmate-server
-.\mvnw.cmd clean package -DskipTests
-# 产物：target/matchmate-server-0.0.1-SNAPSHOT.jar
+./mvnw.cmd clean package
 ```
 
-### 2.2 前端
+构建产物为 `matchmate-server/target/matchmate-server-0.0.1-SNAPSHOT.jar`。
+
+### 2.2 构建前端
 
 ```powershell
 cd matchmate-mobile
-npm run build
-# 产物：dist/
+npm.cmd ci
+npm.cmd run build
+tar -czf dist.tar.gz dist
 ```
 
----
+## 三、上传部署文件
 
-## 三、上传到服务器
-
-### 3.1 创建部署目录
+先在服务器创建目录：
 
 ```bash
 sudo mkdir -p /opt/matchmate
-sudo chown $USER:$USER /opt/matchmate
 ```
 
-### 3.2 上传文件
+从本地项目根目录上传文件。请替换 `DEPLOY_USER` 和 `SERVER_IP`：
 
 ```powershell
-# 后端 jar
-scp "matchmate-server\target\matchmate-server-0.0.1-SNAPSHOT.jar" admin@你的IP:/opt/matchmate/
-
-# 前端（先打包）
-cd matchmate-mobile
-tar -czf dist.tar.gz dist
-scp dist.tar.gz admin@你的IP:/opt/matchmate/
-
-# 数据库导出文件
-scp local-dump.sql admin@你的IP:/opt/matchmate/
+scp matchmate-server/target/matchmate-server-0.0.1-SNAPSHOT.jar DEPLOY_USER@SERVER_IP:/tmp/matchmate-server.jar
+scp matchmate-mobile/dist.tar.gz DEPLOY_USER@SERVER_IP:/tmp/matchmate-dist.tar.gz
+scp matchmate-server/src/main/resources/schema.sql DEPLOY_USER@SERVER_IP:/tmp/matchmate-schema.sql
 ```
 
-### 3.3 服务器解压前端
+在服务器上安装文件：
 
 ```bash
-cd /opt/matchmate
-tar -xzf dist.tar.gz
+sudo install -m 640 /tmp/matchmate-server.jar /opt/matchmate/matchmate-server.jar
+sudo tar -xzf /tmp/matchmate-dist.tar.gz -C /opt/matchmate
+sudo install -m 600 /tmp/matchmate-schema.sql /opt/matchmate/schema.sql
+rm -f /tmp/matchmate-server.jar /tmp/matchmate-dist.tar.gz /tmp/matchmate-schema.sql
 ```
 
----
-
-## 四、导入数据库
-
-### 4.1 本地导出
-
-```powershell
-mysqldump -u root -p -r local-dump.sql matchmate
-```
-
-> 用 `-r` 避免 PowerShell 编码问题
-
-### 4.2 服务器导入
+## 四、初始化数据库
 
 ```bash
-mysql -u root -p你的密码 matchmate < /opt/matchmate/local-dump.sql
+mysql -u matchmate -p matchmate < /opt/matchmate/schema.sql
 ```
 
-验证：
+命令会交互式询问密码。`schema.sql` 只包含表结构和标签基础数据，不包含用户、管理员、密码或线上业务数据。
+
+首次部署后，通过网页注册自己的账号。如需管理员权限，在服务器进入数据库：
+
 ```bash
-mysql -u root -p你的密码 -e "SHOW TABLES;" matchmate
+mysql -u matchmate -p matchmate
 ```
 
----
+确认账号无误后执行：
 
-## 五、环境变量配置
+```sql
+UPDATE user SET userRole = 1 WHERE userAccount = 'YOUR_ADMIN_ACCOUNT';
+```
 
-创建 `/opt/matchmate/.env`：
+## 五、配置环境变量
+
+创建只允许 root 读取的环境文件：
 
 ```bash
-cat > /opt/matchmate/.env << 'EOF'
+sudo install -o root -g root -m 600 /dev/null /opt/matchmate/.env
+sudoedit /opt/matchmate/.env
+```
+
+写入以下内容并替换所有 `REPLACE_WITH_*`：
+
+```dotenv
 DB_URL=jdbc:mysql://localhost:3306/matchmate
-DB_USERNAME=root
-DB_PASSWORD=你的数据库密码
+DB_USERNAME=matchmate
+DB_PASSWORD=REPLACE_WITH_DB_PASSWORD
 REDIS_HOST=localhost
 REDIS_PORT=6379
-REDIS_PASSWORD=你的Redis密码
+REDIS_PASSWORD=REPLACE_WITH_REDIS_PASSWORD
 REDIS_DATABASE=0
 SPRING_PROFILES_ACTIVE=prod
 SESSION_COOKIE_SECURE=false
-MATCHMATE_CORS_ALLOWED_ORIGINS=http://你的服务器IP
+MATCHMATE_CORS_ALLOWED_ORIGINS=http://SERVER_IP
 CACHE_ENABLED=true
 CACHE_WARMUP_ENABLED=true
 MANAGEMENT_ENDPOINTS=health
-EOF
+
+# OSS 可选；不使用头像上传时保持为空
+OSS_ENDPOINT=
+OSS_ACCESS_KEY_ID=
+OSS_ACCESS_KEY_SECRET=
+OSS_BUCKET_NAME=
+OSS_PUBLIC_BASE_URL=
 ```
 
-### OSS 配置（追加到 .env）
+不要用 `cat .env` 检查内容，以免密钥出现在终端录屏或日志中。
+
+## 六、创建 Systemd 服务
+
+创建独立的低权限服务账号：
 
 ```bash
-cat >> /opt/matchmate/.env << 'EOF'
-OSS_ENDPOINT=oss-cn-shenzhen.aliyuncs.com
-OSS_ACCESS_KEY_ID=你的AccessKeyID
-OSS_ACCESS_KEY_SECRET=你的AccessKeySecret
-OSS_BUCKET_NAME=你的Bucket名称
-OSS_PUBLIC_BASE_URL=https://你的Bucket名称.oss-cn-shenzhen.aliyuncs.com
-EOF
+sudo useradd --system --home /opt/matchmate --shell /usr/sbin/nologin matchmate 2>/dev/null || true
+sudo chown -R matchmate:matchmate /opt/matchmate
+sudo chown root:root /opt/matchmate/.env
+sudo chmod 600 /opt/matchmate/.env
 ```
 
-> OSS 需要先在阿里云控制台创建 Bucket（公共读权限）和 AccessKey
-
----
-
-## 六、Systemd 服务
-
-创建 `/etc/systemd/system/matchmate-server.service`：
+`.env` 保持 `root:root` 和 `600` 权限。创建服务：
 
 ```bash
-sudo tee /etc/systemd/system/matchmate-server.service << 'EOF'
+sudo tee /etc/systemd/system/matchmate-server.service > /dev/null << 'EOF'
 [Unit]
 Description=MatchMate Server
 After=network.target mysql.service redis-server.service
 
 [Service]
 Type=simple
-User=admin
+User=matchmate
 WorkingDirectory=/opt/matchmate
 EnvironmentFile=/opt/matchmate/.env
-ExecStart=/usr/bin/java -jar /opt/matchmate/matchmate-server-0.0.1-SNAPSHOT.jar
+ExecStart=/usr/bin/java -jar /opt/matchmate/matchmate-server.jar
 Restart=on-failure
 RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 EOF
-```
 
-启动：
-
-```bash
 sudo systemctl daemon-reload
-sudo systemctl enable matchmate-server
-sudo systemctl start matchmate-server
+sudo systemctl enable --now matchmate-server
+sudo systemctl status matchmate-server
 ```
 
----
-
-## 七、Nginx 配置
+## 七、配置 Nginx
 
 ```bash
-sudo tee /etc/nginx/sites-available/matchmate << 'EOF'
+sudo tee /etc/nginx/sites-available/matchmate > /dev/null << 'EOF'
 server {
     listen 80;
     server_name _;
@@ -243,144 +244,89 @@ server {
 
     location /api/ {
         proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
     }
 }
 EOF
-```
 
-启用：
-
-```bash
-sudo ln -sf /etc/nginx/sites-available/matchmate /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/matchmate /etc/nginx/sites-enabled/matchmate
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
-sudo systemctl restart nginx
-```
-
----
-
-## 八、防火墙开放端口
-
-轻量应用服务器控制台 → 防火墙 → 添加规则：
-
-| 应用类型 | 协议 | 端口 | 来源 |
-|----------|------|------|------|
-| 自定义 | TCP | 80 | 0.0.0.0/0 |
-
-> 如果用的是 ECS，在安全组里添加入方向规则。
-
----
-
-## 九、验证
-
-```bash
-# 后端健康检查
-curl -s http://127.0.0.1:8080/api/actuator/health
-# → {"status":"UP"}
-
-# Nginx + 前端
-curl -s http://127.0.0.1/ | head -5
-# → <!doctype html>...
-
-# 查看日志
-journalctl -u matchmate-server -f
-```
-
-本地验证通过后，可访问线上环境：[https://mate.cinoo.xyz](https://mate.cinoo.xyz)。
-
----
-
-## 十、常用运维命令
-
-```bash
-# 查看后端日志
-journalctl -u matchmate-server -f
-
-# 重启后端
-sudo systemctl restart matchmate-server
-
-# 查看后端状态
-sudo systemctl status matchmate-server
-
-# 重载 Nginx
-sudo systemctl reload nginx
-
-# 查看 MySQL 状态
-sudo systemctl status mysql
-
-# 查看 Redis 状态
-sudo systemctl status redis-server
-
-# 更新部署（jar 包替换后）
-sudo systemctl restart matchmate-server
-
-# 更新前端（dist 替换后无需重启）
 sudo systemctl reload nginx
 ```
 
----
-
-## 十一、生产域名与 HTTPS
+## 八、验证
 
 ```bash
-# 1. 修改 Nginx server_name
-sudo nano /etc/nginx/sites-available/matchmate
-# 把 server_name _; 改为 server_name mate.cinoo.xyz;
+curl -fsS http://127.0.0.1:8080/api/actuator/health
+curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1/
+journalctl -u matchmate-server --no-pager -n 100
+```
 
-# 2. 修改 CORS
-sudo nano /opt/matchmate/.env
-# MATCHMATE_CORS_ALLOWED_ORIGINS=https://mate.cinoo.xyz
-# SESSION_COOKIE_SECURE=true
+预期健康检查返回 `{"status":"UP"}`，前端返回 `200`。
 
-# 3. 申请免费 SSL 证书
+## 九、配置域名与 HTTPS
+
+先把 `YOUR_DOMAIN` 解析到服务器，然后修改 Nginx：
+
+```bash
+sudoedit /etc/nginx/sites-available/matchmate
+```
+
+把 `server_name _;` 改成 `server_name YOUR_DOMAIN;`，再申请证书：
+
+```bash
 sudo apt install certbot python3-certbot-nginx -y
-sudo certbot --nginx -d mate.cinoo.xyz
+sudo certbot --nginx -d YOUR_DOMAIN
+```
 
-# 4. 防火墙开放 443 端口
+随后修改 `/opt/matchmate/.env`：
 
-# 5. 重启服务
+```dotenv
+SESSION_COOKIE_SECURE=true
+MATCHMATE_CORS_ALLOWED_ORIGINS=https://YOUR_DOMAIN
+```
+
+重启后端并验证：
+
+```bash
 sudo systemctl restart matchmate-server
+sudo nginx -t
+sudo systemctl reload nginx
+curl -fsS https://YOUR_DOMAIN/api/actuator/health
+```
+
+## 十、更新与运维
+
+替换新构建的后端文件后：
+
+```bash
+sudo install -o matchmate -g matchmate -m 640 /tmp/matchmate-server.jar /opt/matchmate/matchmate-server.jar
+sudo systemctl restart matchmate-server
+```
+
+替换前端：
+
+```bash
+sudo rm -rf /opt/matchmate/dist
+sudo tar -xzf /tmp/matchmate-dist.tar.gz -C /opt/matchmate
+sudo chown -R matchmate:matchmate /opt/matchmate/dist
 sudo systemctl reload nginx
 ```
 
----
+常用命令：
 
-## 十二、环境变量速查
-
-| 变量 | 说明 | 示例 |
-|------|------|------|
-| DB_URL | 数据库连接 | `jdbc:mysql://localhost:3306/matchmate` |
-| DB_USERNAME | 数据库用户 | `root` |
-| DB_PASSWORD | 数据库密码 | `your_password` |
-| REDIS_HOST | Redis 地址 | `localhost` |
-| REDIS_PASSWORD | Redis 密码 | `your_password` |
-| SPRING_PROFILES_ACTIVE | 激活配置 | `prod` |
-| SESSION_COOKIE_SECURE | HTTPS Cookie | 备案前 `false`，后 `true` |
-| MATCHMATE_CORS_ALLOWED_ORIGINS | 跨域白名单 | IP 或域名 |
-| OSS_ENDPOINT | OSS 地域节点 | `oss-cn-shenzhen.aliyuncs.com` |
-| OSS_ACCESS_KEY_ID | 阿里云 AK | `LTAI5t...` |
-| OSS_ACCESS_KEY_SECRET | 阿里云 SK | `your_secret` |
-| OSS_BUCKET_NAME | OSS Bucket 名 | `matchmate-xxx` |
-| OSS_PUBLIC_BASE_URL | OSS 公开访问地址 | `https://xxx.oss-cn-shenzhen.aliyuncs.com` |
-
----
-
-## 目录结构（服务器）
-
+```bash
+journalctl -u matchmate-server -f
+sudo systemctl restart matchmate-server
+sudo systemctl reload nginx
+sudo systemctl status mysql redis-server matchmate-server nginx
 ```
-/opt/matchmate/
-  ├── .env                          # 环境变量(DB/Redis/OSS/CORS 等)
-  ├── matchmate-server-0.0.1-SNAPSHOT.jar  # 后端 Spring Boot 可执行 jar
-  ├── local-dump.sql                # 全量备份(mysqldump 导出: 表结构+数据)
-  └── dist/                         # 前端静态文件(Vite 构建产物)
-       ├── index.html               # SPA 入口
-       ├── assets/                  # JS/CSS/图片 等静态资源
-       └── ...
-```
+
+数据库备份可能包含用户资料和聊天数据，应限制文件权限、加密保存，并且绝不能提交到公开仓库。

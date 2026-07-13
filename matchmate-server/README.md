@@ -4,7 +4,7 @@
 
 后端围绕业务需求做了登录态管理、权限校验、缓存失效、单设备登录、WebSocket 实时推送、分布式锁、文件上传和数据清理等工程化处理。
 
-线上产品：[https://mate.cinoo.xyz](https://mate.cinoo.xyz) · [返回项目总览](../README.md)
+线上产品：[https://mate.cinoo.xyz](https://mate.cinoo.xyz)（网页不定期开放，可能暂时无法访问） · [返回项目总览](../README.md)
 
 ## 技术栈
 
@@ -68,6 +68,11 @@ matchmate-server/
 | `OSS_ACCESS_KEY_SECRET` | — | 阿里云 OSS Secret |
 | `OSS_BUCKET_NAME` | — | OSS Bucket 名称 |
 | `OSS_ENDPOINT` | — | OSS Endpoint |
+| `OSS_PUBLIC_BASE_URL` | — | OSS 文件公开访问地址 |
+| `MATCHMATE_CORS_ALLOWED_ORIGINS` | 本地开发地址 | 允许携带凭据访问的前端来源，多个值用逗号分隔 |
+| `SESSION_COOKIE_SECURE` | 生产环境为 `true` | 是否仅通过 HTTPS 发送 Session Cookie |
+| `CHAT_MESSAGE_AGE` | `1d` | 聊天消息保留时长 |
+| `DATA_RETENTION_CLEANUP_CRON` | `0 5 * * * *` | 数据清理任务 cron |
 
 ## 用户模块
 
@@ -226,7 +231,8 @@ OSS 配置通过环境变量传入，避免密钥提交到仓库。
 导入数据库：
 
 ```bash
-mysql -u root -p < src/main/resources/schema.sql
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS matchmate CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -u root -p matchmate < src/main/resources/schema.sql
 ```
 
 启动服务：

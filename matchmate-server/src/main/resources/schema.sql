@@ -16,14 +16,6 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
--- Current Database: `matchmate`
---
-
-CREATE DATABASE /*!32312 IF NOT EXISTS*/ `matchmate` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
-
-USE `matchmate`;
-
---
 -- Table structure for table `app_setting`
 --
 
@@ -61,7 +53,7 @@ CREATE TABLE `card_fund_participant` (
   `user_id` bigint NOT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_fund_id` (`fund_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='平摊资金参与明细';
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='平摊资金参与明细';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -89,7 +81,7 @@ CREATE TABLE `card_fund_record` (
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_room_id` (`room_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='平摊资金记录';
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='平摊资金记录';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -182,7 +174,7 @@ CREATE TABLE `cardroom` (
   KEY `idx_ownerId` (`ownerId`),
   KEY `idx_status` (`status`),
   KEY `idx_retention` (`status`,`isDelete`,`createTime`,`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=51 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='打牌记账房间';
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='打牌记账房间';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -216,7 +208,7 @@ CREATE TABLE `cardroommember` (
   UNIQUE KEY `uk_room_user` (`roomId`,`userId`),
   KEY `idx_userId` (`userId`),
   KEY `idx_room_status` (`roomId`,`status`)
-) ENGINE=InnoDB AUTO_INCREMENT=51 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='房间成员';
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='房间成员';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -245,7 +237,7 @@ CREATE TABLE `cardround` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_room_round` (`roomId`,`roundNo`),
   KEY `idx_roomId` (`roomId`,`createTime` DESC)
-) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='牌局记录';
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='牌局记录';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -273,7 +265,7 @@ CREATE TABLE `cardroundscore` (
   UNIQUE KEY `uk_round_user` (`roundId`,`userId`),
   KEY `idx_roundId` (`roundId`),
   KEY `idx_userId` (`userId`)
-) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='牌局分数';
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='牌局分数';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -409,18 +401,10 @@ CREATE TABLE `user` (
   `winRate` decimal(5,4) NOT NULL DEFAULT '0.0000' COMMENT '胜率',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_user_account` (`userAccount`)
-) ENGINE=InnoDB AUTO_INCREMENT=3059 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户表';
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
---
--- Dumping data for table `user`
---
-
-LOCK TABLES `user` WRITE;
-/*!40000 ALTER TABLE `user` DISABLE KEYS */;
-INSERT INTO `user` VALUES (15,'玉桂狗','cinnamoroll','https://cinoo-matchmate.oss-cn-beijing.aliyuncs.com/userAvatar/15/cf0f4903-54bf-453d-9c8a-2d652ce4fed6.jpg',1,'$2a$10$6MusLzWp8YZZI18fifLacOEr673EDcW54fnumEzYX21V4t4a.xLQO','18800000001','cinnamoroll@example.com',0,'2026-06-01 09:18:00','2026-06-14 20:01:28',0,0,0,0,0,0.0000),(16,'库洛米','kuromi','https://cinoo-matchmate.oss-cn-beijing.aliyuncs.com/userAvatar/16/6ef3485b-af12-43fa-b7a8-d4b8805c0940.jpg',2,'$2a$10$6MusLzWp8YZZI18fifLacOEr673EDcW54fnumEzYX21V4t4a.xLQO','18800000002','kuromi@example.com',0,'2026-06-02 14:26:00','2026-06-14 20:01:28',0,0,0,0,0,0.0000),(17,'美乐蒂','mymelody','https://cinoo-matchmate.oss-cn-beijing.aliyuncs.com/userAvatar/17/afaa24e1-0a78-4234-893b-8afac6a9eaae.jpg',2,'$2a$10$6MusLzWp8YZZI18fifLacOEr673EDcW54fnumEzYX21V4t4a.xLQO','18800000003','mymelody@example.com',0,'2026-06-03 10:42:00','2026-06-12 18:51:52',0,0,0,0,0,0.0000),(18,'凯蒂猫','hellokitty','https://cinoo-matchmate.oss-cn-beijing.aliyuncs.com/userAvatar/18/23d07ed0-12da-4577-8a9c-849700e7d9b6.jpg',2,'$2a$10$6MusLzWp8YZZI18fifLacOEr673EDcW54fnumEzYX21V4t4a.xLQO','18800000004','hellokitty@example.com',0,'2026-06-04 16:05:00','2026-06-12 18:51:52',0,0,0,0,0,0.0000),(19,'布丁狗','pompompurin','https://cinoo-matchmate.oss-cn-beijing.aliyuncs.com/userAvatar/19/75df0e92-52fa-4891-aa77-f047544775a5.jpg',1,'$2a$10$6MusLzWp8YZZI18fifLacOEr673EDcW54fnumEzYX21V4t4a.xLQO','18800000005','pompompurin@example.com',0,'2026-06-05 11:37:00','2026-06-12 18:51:52',0,0,0,0,0,0.0000),(20,'帕恰狗','pochacco','https://cinoo-matchmate.oss-cn-beijing.aliyuncs.com/userAvatar/20/15d88483-f17f-421a-a770-79c08e29a4c6.jpg',1,'$2a$10$6MusLzWp8YZZI18fifLacOEr673EDcW54fnumEzYX21V4t4a.xLQO','18800000006','pochacco@example.com',0,'2026-06-06 08:50:00','2026-06-12 18:51:52',0,0,0,0,0,0.0000),(21,'许愿兔','wishmemell','https://cinoo-matchmate.oss-cn-beijing.aliyuncs.com/userAvatar/21/7ec2ed96-2b88-4813-971b-1a229dee3f71.jpg',2,'$2a$10$6MusLzWp8YZZI18fifLacOEr673EDcW54fnumEzYX21V4t4a.xLQO','18800000007','wishmemell@example.com',0,'2026-06-07 19:12:00','2026-06-12 18:51:52',0,0,0,0,0,0.0000),(22,'人鱼汉顿','hangyodon','https://cinoo-matchmate.oss-cn-beijing.aliyuncs.com/userAvatar/22/31cb62fe-575b-4459-b24b-dcb6424722bf.jpg',1,'$2a$10$6MusLzWp8YZZI18fifLacOEr673EDcW54fnumEzYX21V4t4a.xLQO','18800000008','hangyodon@example.com',0,'2026-06-08 13:33:00','2026-06-12 18:51:52',0,0,0,0,0,0.0000),(23,'酷企鹅','badtzmaru','https://cinoo-matchmate.oss-cn-beijing.aliyuncs.com/userAvatar/23/748760a3-743b-4407-9b29-48509f16375f.jpg',1,'$2a$10$6MusLzWp8YZZI18fifLacOEr673EDcW54fnumEzYX21V4t4a.xLQO','18800000009','badtzmaru@example.com',0,'2026-06-09 21:08:00','2026-06-12 18:51:52',0,0,0,0,0,0.0000),(24,'大眼蛙','keroppi','https://cinoo-matchmate.oss-cn-beijing.aliyuncs.com/userAvatar/24/f22d4852-c8fa-4542-9876-cda4e6ae015d.jpg',1,'$2a$10$6MusLzWp8YZZI18fifLacOEr673EDcW54fnumEzYX21V4t4a.xLQO','18800000010','keroppi@example.com',0,'2026-06-10 15:45:00','2026-06-12 18:51:52',0,0,0,0,0,0.0000),(25,'Admin','admin','https://cinoo-matchmate.oss-cn-beijing.aliyuncs.com/userAvatar/25/e6463419-4faa-4c4d-8496-507a5527fc5a.jpg',1,'$2a$10$6MusLzWp8YZZI18fifLacOEr673EDcW54fnumEzYX21V4t4a.xLQO','18800000011','admin@example.com',0,'2026-06-12 05:06:41','2026-06-14 20:01:28',0,1,0,0,0,0.0000),(26,NULL,'testDel',NULL,NULL,'$2a$10$6MusLzWp8YZZI18fifLacOEr673EDcW54fnumEzYX21V4t4a.xLQO',NULL,NULL,0,'2026-06-12 05:30:54','2026-06-12 14:28:21',1,0,0,0,0,0.0000),(2887,'testovo','testovo',NULL,1,'$2a$10$6MusLzWp8YZZI18fifLacOEr673EDcW54fnumEzYX21V4t4a.xLQO',NULL,NULL,2,'2026-06-14 16:07:26','2026-06-14 16:07:54',1,0,0,0,0,0.0000);
-/*!40000 ALTER TABLE `user` ENABLE KEYS */;
-UNLOCK TABLES;
+-- 用户与管理员数据不随建表脚本分发，部署后按需创建。
 
 --
 -- Table structure for table `user_tag`
@@ -439,26 +423,11 @@ CREATE TABLE `user_tag` (
   KEY `idx_user_tag_tag_id` (`tagId`),
   CONSTRAINT `fk_user_tag_tag` FOREIGN KEY (`tagId`) REFERENCES `tag` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_user_tag_user` FOREIGN KEY (`userId`) REFERENCES `user` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=39 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户标签关联表';
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户标签关联表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
---
--- Dumping data for table `user_tag`
---
+-- 用户标签关系由用户在产品内选择标签后生成。
 
-LOCK TABLES `user_tag` WRITE;
-/*!40000 ALTER TABLE `user_tag` DISABLE KEYS */;
-INSERT INTO `user_tag` VALUES (4,16,1,'2026-06-12 00:58:07'),(5,16,100,'2026-06-12 00:58:07'),(6,16,136,'2026-06-12 00:58:07'),(7,17,12,'2026-06-12 00:58:07'),(8,17,132,'2026-06-12 00:58:07'),(9,17,138,'2026-06-12 00:58:07'),(10,18,9,'2026-06-12 00:58:07'),(11,18,133,'2026-06-12 00:58:07'),(12,18,110,'2026-06-12 00:58:07'),(13,19,3,'2026-06-12 00:58:07'),(14,19,130,'2026-06-12 00:58:07'),(15,19,22,'2026-06-12 00:58:07'),(16,20,11,'2026-06-12 00:58:07'),(17,20,63,'2026-06-12 00:58:07'),(18,20,65,'2026-06-12 00:58:07'),(19,21,6,'2026-06-12 00:58:07'),(20,21,105,'2026-06-12 00:58:07'),(21,21,17,'2026-06-12 00:58:07'),(22,22,4,'2026-06-12 00:58:07'),(23,22,69,'2026-06-12 00:58:07'),(24,22,15,'2026-06-12 00:58:07'),(25,23,5,'2026-06-12 00:58:07'),(26,23,85,'2026-06-12 00:58:07'),(27,23,10,'2026-06-12 00:58:07'),(28,24,14,'2026-06-12 00:58:07'),(29,24,121,'2026-06-12 00:58:07'),(30,24,20,'2026-06-12 00:58:07'),(35,15,2,'2026-06-12 01:08:36'),(36,15,131,'2026-06-12 01:08:36'),(37,15,16,'2026-06-12 01:08:36'),(38,25,142,'2026-06-12 05:13:38');
-/*!40000 ALTER TABLE `user_tag` ENABLE KEYS */;
-UNLOCK TABLES;
-
---
--- Dumping events for database 'matchmate'
---
-
---
--- Dumping routines for database 'matchmate'
---
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -469,4 +438,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-06-14 20:37:19
+-- MatchMate schema initialization complete.
